@@ -64,7 +64,7 @@ class Story(models.Model):
 class Notification(models.Model):
     notifyFrom = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_notifications')
     notifyTo = models.ForeignKey(User, on_delete=models.CASCADE, related_name='received_notifications')
-    notifyType = models.CharField(max_length=50)  # Could be 'like', 'comment', etc.
+    notifyType = models.CharField(max_length=50) 
     notifyText = models.TextField(blank=True)
     notifyPost = models.ForeignKey(Post, on_delete=models.CASCADE, blank=True, null=True)  # Optional reference to post
     notifyTime = models.DateTimeField(auto_now_add=True)
@@ -74,8 +74,8 @@ class Notification(models.Model):
 
 # Extending the Django User model with additional fields
 class UserProfile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
-    firstName = models.CharField(max_length=50)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, unique=True)
+    firstName = models.CharField(max_length=30, null=False, blank=False)
     lastName = models.CharField(max_length=50)
     profileImage = models.TextField(blank=True)   # Profile picture
     bio = models.TextField(blank=True)

@@ -70,7 +70,7 @@ def signup(request, payload: SignUpSchema):
     }
 
 
-@api_view(['GET'])  # Specify the HTTP methods this view should accept
+@api_view(['GET'])  
 @permission_classes([IsAuthenticated])  # Require authentication for this view
 def protected_view(request):
     user = request.user  # Access the authenticated user

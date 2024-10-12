@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'ninja',
     'rest_framework_simplejwt',
+    'ninja_jwt',
     
 ]
 
@@ -150,3 +151,7 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': True, 
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
+
+ALLOWED_HOSTS = [
+    "localhost", "*"
+]

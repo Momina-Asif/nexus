@@ -1,18 +1,20 @@
 from ninja import NinjaAPI, Router
-from .schema import SignUpSchema, LoginSchema 
+from .schema import SignUpSchema, LoginSchema
 from django.contrib.auth.models import User
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 from ninja.errors import HttpError
 from .models import UserProfile
+from typing import *
 
 auth_router = NinjaAPI(urls_namespace='authapi')
 
 
 # Define the signup route
-@auth_router.post("/signup/")
+@auth_router.post("/signup")
 def signup(request, payload: SignUpSchema):
+    print("IN")
     if User.objects.filter(username=payload.username).exists():
         raise HttpError(400, "Username already taken")
 
@@ -47,23 +49,21 @@ def signup(request, payload: SignUpSchema):
 
 
 # Define the login route
-@auth_router.post("/login/")
+@auth_router.post("/login")
 def login(request, payload: LoginSchema):
     username_or_email = payload.username_or_email
     password = payload.password
 
-    # Check if the input is an email or username
     if '@' in username_or_email:
         try:
             user = User.objects.get(email=username_or_email)
             user = authenticate(username=user.username, password=password)
         except User.DoesNotExist:
-            raise HttpError(400, "Invalid email or password")
+            return {"message": "Invalid email or password"}
     else:
         user = authenticate(username=username_or_email, password=password)
 
     if user is not None:
-        # Generate JWT tokens
         refresh = RefreshToken.for_user(user)
         return {
             "success": True,
@@ -73,5 +73,4 @@ def login(request, payload: LoginSchema):
             "access": str(refresh.access_token),
         }
     else:
-        raise HttpError(400, "Invalid username/email or password")
-
+        return {"message": "Invalid username/email or password"}

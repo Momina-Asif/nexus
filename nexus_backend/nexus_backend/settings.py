@@ -33,6 +33,7 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    'corsheaders',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -44,10 +45,11 @@ INSTALLED_APPS = [
     'ninja',
     'rest_framework_simplejwt',
     'ninja_jwt',
-    
+
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.security.SecurityMiddleware',
@@ -58,6 +60,9 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+CORS_ALLOW_ALL_ORIGINS = True
+
 
 ROOT_URLCONF = 'nexus_backend.urls'
 
@@ -136,7 +141,8 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-SESSION_ENGINE = 'django.contrib.sessions.backends.db'  # Store session data in the database
+# Store session data in the database
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -145,10 +151,12 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=2),  # Access token valid for 2 days
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=2),     # Refresh token valid for 2 days
-    'ROTATE_REFRESH_TOKENS': True, 
-    'BLACKLIST_AFTER_ROTATION': True, 
+    # Access token valid for 2 days
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=2),
+    # Refresh token valid for 2 days
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=2),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 

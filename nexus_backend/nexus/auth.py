@@ -76,3 +76,21 @@ def login(request, payload: LoginSchema):
         "refresh": str(refresh),
         "access": str(refresh.access_token),
     }, status=200)
+
+
+
+@auth_router.post("/logout", response={200: dict, 400: dict})
+def logout(request):
+    # Get the token from the Authorization header
+    auth_header = request.headers.get('Authorization')
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
+        try:
+            refresh_token = RefreshToken(token)
+            # Blacklist the refresh token
+            refresh_token.blacklist()
+            return Response({"success": True, "message": "Logged out successfully"}, status=200)
+        except Exception as e:
+            return Response({"success": False, "message": "Invalid token or unable to blacklist"}, status=400)
+    else:
+        return Response({"success": False, "message": "Authorization header is missing or invalid"}, status=400)

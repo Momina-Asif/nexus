@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'ninja',
     'rest_framework_simplejwt',
     'ninja_jwt',
+    'rest_framework_simplejwt.token_blacklist',
 
 ]
 
@@ -158,8 +159,15 @@ SIMPLE_JWT = {
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_BLACKLIST': 'rest_framework_simplejwt.token_blacklist',
 }
 
 ALLOWED_HOSTS = [
     "localhost", "*"
 ]
+import os
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

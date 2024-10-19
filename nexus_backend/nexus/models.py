@@ -8,8 +8,8 @@ from datetime import timedelta
 class Post(models.Model):
     post_id = models.AutoField(primary_key=True)
     user_id = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts')
-    post_image = models.TextField()
-    caption = models.CharField(max_length=255)
+    post_image = models.ImageField(upload_to='posts/', blank=True, null=True)
+    caption = models.TextField(max_length=255, blank=True, null=True)
     likes_list = models.ManyToManyField(User, related_name='liked_posts', blank=True)
     post_date = models.DateTimeField(auto_now_add=True)
 

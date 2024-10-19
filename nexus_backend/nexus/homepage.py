@@ -12,10 +12,9 @@ hp_router.add_router("/post/", post_router)
 
 @hp_router.get("/posts", auth=JWTAuth())
 def get_homepage_posts(request) -> Response:
-    # Ensure the user is authenticated
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
-
+    # Retrieve the user profile for the authenticated user
     try:
         user_profile = UserProfile.objects.get(user=request.user)
     except UserProfile.DoesNotExist:
@@ -25,15 +24,17 @@ def get_homepage_posts(request) -> Response:
 
     posts = Post.objects.filter(user_id__in=following_users).order_by('-post_date')
 
+    if not posts.exists():
+        return Response({"message": "No posts available."}, status=200)
+
     response_data = [
         {
             "id": post.post_id,
             "user": post.user_id.username,
-            "post_image": post.post_image.url if post.post_image else None,  # Ensure post_image is URL
+            "post_image": post.post_image.url if post.post_image else None,
             "created_at": post.post_date.isoformat(),
             "caption": post.caption,
         }
         for post in posts
     ]
-
     return Response(response_data, status=200)

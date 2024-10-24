@@ -3,18 +3,25 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 from datetime import timedelta
-
+import os
 # Post Model
+def post_image_directory(instance, filename):
+        ext = filename.split('.')[-1] 
+        filename = f'{instance.post_id}.{ext}'
+        return os.path.join('posts', filename)
+
 class Post(models.Model):
     post_id = models.AutoField(primary_key=True)
     user_id = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts')
-    post_image = models.ImageField(upload_to='posts/', blank=True, null=True)
+    post_image = models.ImageField(upload_to=post_image_directory, blank=True, null=True)
     caption = models.TextField(max_length=255, blank=True, null=True)
     likes_list = models.ManyToManyField(User, related_name='liked_posts', blank=True)
     post_date = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f'{self.user_id.username}: {self.caption}'
+    
+    
 
 # Comment Model
 class Comment(models.Model):

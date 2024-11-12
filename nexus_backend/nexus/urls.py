@@ -3,10 +3,12 @@
 from django.urls import path
 from .auth import auth_router as authapis
 from .homepage import hp_router as homepageapi
-from .create import create_router as createapi
+from .posts import post_router as postsapi
+from .story import story_router as storyapi
 
 urlpatterns = [
     path("auth/", authapis.urls),
     path("homepage/", homepageapi.urls),
-    path("create/", createapi.urls),
+    path("posts/", postsapi.urls),
+    path("story/", storyapi.urls),
 ]

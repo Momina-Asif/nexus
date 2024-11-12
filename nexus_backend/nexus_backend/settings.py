@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'ninja_jwt',
     'rest_framework_simplejwt.token_blacklist',
+    'django_celery_beat',
 
 ]
 
@@ -96,7 +97,7 @@ DATABASES = {
         'NAME': config('DB_NAME'),
         'USER': config('DB_USER'),
         'PASSWORD': config('DB_PASSWORD'),
-        'HOST': 'dpg-crvuulo8fa8c73dum5h0-a.oregon-postgres.render.com',
+        'HOST': 'dpg-cslp29jqf0us739151vg-a.oregon-postgres.render.com',
         'PORT': '5432',
     }
 }
@@ -170,4 +171,8 @@ import os
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'

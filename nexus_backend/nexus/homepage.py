@@ -8,13 +8,16 @@ from .posts import post_router
 
 # Create an instance of NinjaAPI
 hp_router = NinjaAPI(urls_namespace='HPapi')
-hp_router.add_router("/post/", post_router)
+
+from django.conf import settings
+import os
+
 
 @hp_router.get("/posts", auth=JWTAuth())
 def get_homepage_posts(request) -> Response:
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
-    # Retrieve the user profile for the authenticated user
+
     try:
         user_profile = UserProfile.objects.get(user=request.user)
     except UserProfile.DoesNotExist:
@@ -22,19 +25,30 @@ def get_homepage_posts(request) -> Response:
 
     following_users = user_profile.following.all()
 
-    posts = Post.objects.filter(user_id__in=following_users).order_by('-post_date')
+    following_and_self = list(following_users) + [request.user]
+
+    posts = Post.objects.filter(user_id__in=following_and_self).order_by('-post_date')
 
     if not posts.exists():
         return Response({"message": "No posts available."}, status=200)
 
-    response_data = [
-        {
+    response_data = []
+    for post in posts:
+        post_image_url = None
+        if post.post_image:
+            post_image_url = os.path.join(settings.MEDIA_URL, f'posts/{post.post_id}.{post.post_image.name.split(".")[-1]}')
+
+        likes_count = post.likes_list.count()  
+        comments_count = post.comments.count() 
+
+        response_data.append({
             "id": post.post_id,
             "user": post.user_id.username,
-            "post_image": post.post_image.url if post.post_image else None,
+            "post_image": post_image_url,
             "created_at": post.post_date.isoformat(),
             "caption": post.caption,
-        }
-        for post in posts
-    ]
+            "likes_count": likes_count,
+            "comments_count": comments_count,
+        })
+
     return Response(response_data, status=200)

@@ -7,7 +7,7 @@ from .schema import PostSchema, CommentSchema
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 
-post_router = Router()
+post_router = NinjaAPI(urls_namespace='postAPI')
 
 @post_router.post("/view-comments", auth=JWTAuth())
 def get_comments(request, payload: PostSchema) -> Response:
@@ -154,20 +154,18 @@ def delete_comment(request, comment_id: int) -> Response:
 
 @post_router.post("/create-post", auth=JWTAuth())
 def create_post(request, caption: str = Form(None), post_image: UploadedFile = File(None)) -> Response:
-    # Ensure the user is authenticated
+
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
 
-    # Create the post first to get the post ID
     post = Post.objects.create(user_id=request.user, caption=caption)
 
-    # Save the uploaded image with the post ID as the filename
     if post_image:
         ext = post_image.name.split('.')[-1]  # Get file extension
         image_name = f'posts/{post.post_id}.{ext}'
         image_path = default_storage.save(image_name, ContentFile(post_image.read()))
         post.post_image = image_path
-        post.save()  # Save the post again with the updated image path
+        post.save()  
 
     return Response({
         "success": True,

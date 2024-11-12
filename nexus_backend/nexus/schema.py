@@ -18,3 +18,10 @@ class PostSchema(Schema):
 class CommentSchema(Schema):
     post_id: int
     comment_message: str
+
+class ViewStorySchema(Schema):
+    story_id: int
+    username: Optional[str] = None
+
+class ViewUserStorySchema(Schema):
+    username: str

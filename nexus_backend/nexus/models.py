@@ -3,12 +3,14 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 from datetime import timedelta
+from django.utils import timezone
 import os
 # Post Model
 def post_image_directory(instance, filename):
         ext = filename.split('.')[-1] 
         filename = f'{instance.post_id}.{ext}'
         return os.path.join('posts', filename)
+
 
 class Post(models.Model):
     post_id = models.AutoField(primary_key=True)
@@ -45,22 +47,7 @@ class Message(models.Model):
     def __str__(self):
         return f'{self.message_from.username} to {self.message_to.username}: {self.message_text[:20]}...'
 
-# Story Model
-class Story(models.Model):
-    story_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='stories')
-    story_text = models.TextField(blank=True)
-    story_image = models.TextField()
-    story_time = models.DateTimeField(auto_now_add=True)
 
-    @property
-    def expiry_time(self):
-        return self.story_time + timedelta(hours=24)
-
-    def is_expired(self):
-        return timezone.now() > self.expiry_time
-
-    def __str__(self):
-        return f'{self.story_user.username} posted a story'
 
 # Notification Model
 class Notification(models.Model):
@@ -79,12 +66,27 @@ class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, unique=True)
     first_name = models.CharField(max_length=30, null=False, blank=False, default='User')
     last_name = models.CharField(max_length=50)
-    profile_image = models.TextField(blank=True)
+    profile_image = models.ImageField(upload_to='profile_images/', blank=True, null=True)  # Changed to ImageField
     bio = models.TextField(blank=True)
     pending_requests = models.ManyToManyField(User, related_name='friend_requests', blank=True)
     sent_requests = models.ManyToManyField(User, related_name='sent_requests', blank=True)
     followers = models.ManyToManyField(User, related_name='followed_by', blank=True)
     following = models.ManyToManyField(User, related_name='following', blank=True)
+    
+    # Story Model
+class Story(models.Model):
+    story_id = models.AutoField(primary_key=True)
+    story_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='stories')
+    story_text = models.TextField(blank=True)
+    story_image = models.ImageField(upload_to='media/story', blank=True, null=True)
+    story_time = models.DateTimeField(auto_now_add=True)
+    viewed_by = models.ManyToManyField(User, related_name='viewed_by', blank=True)
+
+    # Use a function to calculate the default expiration time
+    def default_expiration_time():
+        return timezone.now() + timedelta(days=1)
+
+    expires_at = models.DateTimeField(default=default_expiration_time)
 
     def __str__(self):
-        return self.user.username
+        return f'{self.story_user.username} posted a story'

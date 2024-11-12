@@ -2,7 +2,7 @@ from django.contrib import admin
 
 # Register your models here.
 from django.contrib.auth.models import User  # Import the built-in User model
-from .models import Post, UserProfile, Notification, Comment, Message, Story  # Import your custom models
+from .models import Post, UserProfile, Notification, Comment, Message, Story
 
 # Check if User is already registered
 if not admin.site.is_registered(User):

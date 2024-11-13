@@ -7,13 +7,14 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('nexus', '0011_alter_userprofile_profile_image'),
+        # ('nexus', '0011_alter_userprofile_profile_image'),
     ]
 
     operations = [
         migrations.AddField(
             model_name='story',
             name='expires_at',
-            field=models.DateTimeField(default=nexus.models.Story.default_expiration_time),
+            field=models.DateTimeField(
+                default=nexus.models.Story.default_expiration_time),
         ),
     ]

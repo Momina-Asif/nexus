@@ -1,5 +1,12 @@
-from ninja import Schema
+from ninja import Schema, File, Form,  UploadedFile
 from typing import Optional
+from ninja.files import UploadedFile
+class EditUserSchema(Schema):
+    username: str = Form(None)
+    first_name: Optional[str] = Form(None)
+    last_name: Optional[str] = Form(None)
+    bio: Optional[str] = Form(None)
+    profile_picture: Optional[UploadedFile] = File(None)
 
 class SignUpSchema(Schema):
     username: str
@@ -9,7 +16,7 @@ class SignUpSchema(Schema):
     last_name: Optional[str] = None
 
 class LoginSchema(Schema):
-    username_or_email: str  # Allow either username or email
+    username_or_email: str
     password: str
 
 class PostSchema(Schema):
@@ -21,7 +28,8 @@ class CommentSchema(Schema):
 
 class ViewStorySchema(Schema):
     story_id: int
-    username: Optional[str] = None
+
 
 class ViewUserStorySchema(Schema):
     username: str
+    index: int

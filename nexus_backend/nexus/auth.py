@@ -10,6 +10,8 @@ from .models import UserProfile
 auth_router = NinjaAPI(urls_namespace='authapi')
 
 # Define the signup route
+
+
 @auth_router.post("/signup", response={201: dict, 400: dict})
 def signup(request, payload: SignUpSchema):
     print("IN")
@@ -46,6 +48,8 @@ def signup(request, payload: SignUpSchema):
     }, status=201)
 
 # Define the login route
+
+
 @auth_router.post("/login", response={200: dict, 401: dict, 404: dict})
 def login(request, payload: LoginSchema):
     username_or_email = payload.username_or_email
@@ -72,11 +76,10 @@ def login(request, payload: LoginSchema):
     return Response({
         "success": True,
         "message": "User logged in successfully",
-        "user_id": user.id,
+        "username": user.username,
         "refresh": str(refresh),
         "access": str(refresh.access_token),
     }, status=200)
-
 
 
 @auth_router.post("/logout", response={200: dict, 400: dict})

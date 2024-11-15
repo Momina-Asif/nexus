@@ -11,21 +11,25 @@ from ninja.errors import HttpError
 from ninja import Schema, File, Form,  UploadedFile
 from typing import Optional
 from ninja import Body
+from .schema import SearchUserSchema
+from django.contrib.auth.hashers import make_password
 
 user_router = NinjaAPI(urls_namespace='userAPI')
 
 
-
 user_router = NinjaAPI(urls_namespace='userAPI')
+
 
 @user_router.post("/edit-profile", auth=JWTAuth())
-def edit_profile(request,  
-    username: str = Form(None),
-    first_name: Optional[str] = Form(None),
-    last_name: Optional[str] = Form(None),
-    bio: Optional[str] = Form(None),
-    profile_picture: Optional[UploadedFile] = File(None)) -> Response:
-    
+def edit_profile(request,
+                 username: str = Form(None),
+                 first_name: Optional[str] = Form(None),
+                 last_name: Optional[str] = Form(None),
+                 bio: Optional[str] = Form(None),
+                 previous_password: Optional[str] = Form(None),
+                 new_password: Optional[str] = Form(None),
+                 profile_picture: Optional[UploadedFile] = File(None)) -> Response:
+
     # Ensure the user is authenticated
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
@@ -35,10 +39,13 @@ def edit_profile(request,
         user_profile = UserProfile.objects.get(user=request.user)
     except UserProfile.DoesNotExist:
         return Response({"error": "User profile not found"}, status=404)
-    
+
     # Check if any data was provided
     if not any([username, first_name, last_name, bio, profile_picture]):
-        raise HttpError(status_code=400, detail="Bad request. No data provided.")
+        raise HttpError(status_code=400,
+                        detail="Bad request. No data provided.")
+
+    print(profile_picture)
 
     # Update fields if provided in the form data
     if username:
@@ -49,22 +56,32 @@ def edit_profile(request,
         request.user.last_name = last_name
     if bio:
         user_profile.bio = bio
+    if previous_password and new_password:
+        if (previous_password == request.user.password):
+            request.user.password = make_password(new_password)
+        # else:
+            # send an appropriate error respone
     if profile_picture:
         # If a profile image exists, delete it
         if user_profile.profile_image:
-            user_profile.profile_image.delete(save=False)  # Delete the old image file
+            user_profile.profile_image.delete(
+                save=False)  # Delete the old image file
         # Save the new image
         image_name = f'profile_images/{request.user.id}.png'
-        image_path = default_storage.save(image_name, ContentFile(profile_picture.read()))
-        user_profile.profile_image = image_path  # Assign the new image file to the model field
-    
+        image_path = default_storage.save(
+            image_name, ContentFile(profile_picture.read()))
+        # Assign the new image file to the model field
+
+        user_profile.profile_image = image_path
+
     # Save updated user and profile information
     request.user.save()
     user_profile.save()
 
     # Define the profile picture URL with a default fallback
     profile_picture_url = (
-        user_profile.profile_image.url if user_profile.profile_image else f"{settings.MEDIA_URL}profile_images/default.png"
+        user_profile.profile_image.url if user_profile.profile_image else f"{
+            settings.MEDIA_URL}profile_images/default.png"
     )
 
     return Response({
@@ -81,43 +98,50 @@ def edit_profile(request,
 
 
 @user_router.post("/search-user", auth=JWTAuth())
-def search_user(request, username: str = Form(...)) -> Response:
-    
+def search_user(request, payload: SearchUserSchema) -> Response:
+
     # Ensure the user is authenticated
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
-    
+
     # Filter users by username containing the search query
-    users = User.objects.filter(username__icontains=username)
-    
+    users = User.objects.filter(username__icontains=payload.username)
+
     # Prepare response data including the profile picture
     user_data = []
     for user in users:
         # Check if user has a profile image, otherwise set to default
-        user_profile = UserProfile.objects.get(user=user) if hasattr(user, 'userprofile') else None
+        user_profile = UserProfile.objects.get(
+            user=user) if hasattr(user, 'userprofile') else None
         profile_picture_url = (
-            user_profile.profile_image.url if user_profile and user_profile.profile_image else f"{settings.MEDIA_URL}profile_images/default.png"
+            user_profile.profile_image.url if user_profile and user_profile.profile_image else f"{
+                settings.MEDIA_URL}profile_images/default.png"
         )
-        
+        is_following = False
+        if (request.user.following.filter(id=user.id).exists()):
+            is_following = True
+
         user_data.append({
             "username": user.username,
             "first_name": user.first_name,
             "last_name": user.last_name,
-            "profile_picture": profile_picture_url
+            "profile_picture": profile_picture_url,
+            "is_following": is_following
         })
-    
+
     # Return the response with matching users and status code 200
     return Response({"users": user_data}, status=200)
 
+
 @user_router.post("/user-profile", auth=JWTAuth())
-def user_profile(request, body: dict = Body(...)) -> Response:
+def user_profile(request, payload: SearchUserSchema) -> Response:
     # Ensure the user is authenticated
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
 
     # Get the username from the JSON body
-    username = body.get('username')
-    
+    username = payload.username
+
     if not username:
         return Response({"error": "Username is required"}, status=400)
 
@@ -137,6 +161,9 @@ def user_profile(request, body: dict = Body(...)) -> Response:
 
     searched_user_follows = searched_user in auth_user_profile.followers.all()
 
+    followers_count = user_profile.followers.all().count()
+    following_count = user_profile.following.all().count()
+
     posts_data = []
     if follows_searched_user or request.user == searched_user:  # Include posts if follows or same user
         posts = Post.objects.filter(user_id=searched_user)
@@ -148,6 +175,10 @@ def user_profile(request, body: dict = Body(...)) -> Response:
             for post in posts
         ]
 
+    user_is_himself = False
+    if (request.user == searched_user):
+        user_is_himself = True
+
     user_data = {
         "username": searched_user.username,
         "first_name": searched_user.first_name,
@@ -156,7 +187,10 @@ def user_profile(request, body: dict = Body(...)) -> Response:
         "profile_picture": user_profile.profile_image.url if user_profile.profile_image else f"{settings.MEDIA_URL}profile_images/default.png",
         "posts": posts_data,
         "follows_searched_user": follows_searched_user,
-        "searched_user_follows": searched_user_follows
+        "searched_user_follows": searched_user_follows,
+        "user_is_himself": user_is_himself,
+        "followers_count": followers_count,
+        "following_count": following_count
     }
 
     return Response({"user_profile": user_data}, status=200)

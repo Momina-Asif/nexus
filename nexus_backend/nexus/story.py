@@ -6,6 +6,7 @@ from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from .schema import ViewStorySchema, ViewUserStorySchema
 from django.core.exceptions import ObjectDoesNotExist
+from django.conf import settings
 
 story_router = NinjaAPI(urls_namespace='storyAPI')
 
@@ -63,7 +64,7 @@ def get_user_stories(request, payload: ViewUserStorySchema) -> Response:
     viewed_by_user_count = sum(
         1 for story in stories if request.user in story.viewed_by.all())
 
-    if (payload.index >= stories._len_()):
+    if (payload.index >= stories.__len__()):
         payload.index = 0
 
     story = stories[payload.index]
@@ -161,15 +162,18 @@ def get_friends_with_stories(request) -> Response:
             friend_profile = UserProfile.objects.get(user=friend)
 
             # Handle the profile image URL
-            profile_image_url = friend_profile.profile_image.url if friend_profile.profile_image else None
+            profile_image_url = (
+                friend_profile.profile_image.url if friend_profile.profile_image else f"{
+                    settings.MEDIA_URL}profile_images/default.png"
+            )
 
             # Prepare the data for the response
             friends_with_stories.append({
                 "username": friend.username,
                 "user_id": friend.id,
                 "profile_image": profile_image_url,
-                "story_index_to_view": story_index_to_view if story_index_to_view < stories._len_() else 0,
-                "yet_to_view": False if story_index_to_view == stories._len_() else True
+                "story_index_to_view": story_index_to_view if story_index_to_view < stories.__len__() else 0,
+                "yet_to_view": False if story_index_to_view == stories.__len__() else True
             })
 
     return Response({

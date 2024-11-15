@@ -3,11 +3,15 @@ from ninja.responses import Response
 from rest_framework.permissions import IsAuthenticated
 from .models import Post, UserProfile, Comment
 from ninja_jwt.authentication import JWTAuth
-from .schema import PostSchema, CommentSchema
+from .schema import PostSchema, CommentSchema, DeleteCommentSchema
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
+import os
+from django.conf import settings
+
 
 post_router = NinjaAPI(urls_namespace='postAPI')
+
 
 @post_router.post("/view-comments", auth=JWTAuth())
 def get_comments(request, payload: PostSchema) -> Response:
@@ -22,18 +26,36 @@ def get_comments(request, payload: PostSchema) -> Response:
         return Response({"error": "Unauthorized"}, status=401)
 
     # Get comments related to the post
-    comments = post.comments.all()
+    comments = Comment.objects.filter(comment_post=post)
+    print("COM", comments)
 
     # Prepare the response data
-    response_data = [
-        {
+    response_data = []
+    for comment in comments:
+        commented_by = UserProfile.objects.get(user=comment.comment_user)
+
+        profile_picture_url = (
+            commented_by.profile_image.url if commented_by.profile_image else f"{
+                settings.MEDIA_URL}profile_images/default.png"
+
+        )
+        response_data.append({
             "comment_id": comment.comment_id,
             "comment_user": comment.comment_user.username,
             "comment_message": comment.comment_message,
             "comment_date": comment.comment_date.isoformat(),
-        }
-        for comment in comments
-    ]
+            "profile_picture": profile_picture_url
+        })
+
+    # response_data = [
+        # {
+        #     "comment_id": comment.comment_id,
+        #     "comment_user": comment.comment_user.username,
+        #     "comment_message": comment.comment_message,
+        #     "comment_date": comment.comment_date.isoformat(),
+        # }
+    #     for comment in comments
+    # ]
 
     return Response(response_data, status=200)
 
@@ -65,7 +87,49 @@ def get_likes(request, payload: PostSchema) -> Response:
     return Response(response_data, status=200)
 
 
-@post_router.post("/like-post", auth=JWTAuth())
+@post_router.post("/get-post", auth=JWTAuth())
+def like_post(request, payload: PostSchema) -> Response:
+    # Ensure the user is authenticated
+    if not request.user.is_authenticated:
+        return Response({"error": "Unauthorized"}, status=401)
+
+    # Retrieve the post using the provided post_id from the payload
+    try:
+        post = Post.objects.get(post_id=payload.post_id)
+    except Post.DoesNotExist:
+        return Response({"error": "Post not found"}, status=404)
+    post_image_url = os.path.join(
+        settings.MEDIA_URL, f'posts/{post.post_id}.{post.post_image.name.split(".")[-1]}')
+
+    likes_count = post.likes_list.count()
+    current_user_has_liked = False
+    if (post.likes_list.filter(id=request.user.id).exists()):
+        current_user_has_liked = True
+
+    user_profile = UserProfile.objects.get(user=post.user_id)
+    profile_picture_url = (
+        user_profile.profile_image.url if user_profile.profile_image else f"{
+            settings.MEDIA_URL}profile_images/default.png"
+    )
+
+    object_to_return = {
+        "id": post.post_id,
+        "user": post.user_id.username,
+        "post_image": post_image_url,
+        "created_at": post.post_date.isoformat(),
+        "caption": post.caption,
+        "likes_count": likes_count,
+        "has_liked": current_user_has_liked,
+        "profile_picture": profile_picture_url
+    }
+
+    # Add the logged-in user to the likes_list of the post
+
+    # Prepare a response message
+    return Response(object_to_return, status=201)
+
+
+@post_router.post("/toggle-like", auth=JWTAuth())
 def like_post(request, payload: PostSchema) -> Response:
     # Ensure the user is authenticated
     if not request.user.is_authenticated:
@@ -78,35 +142,43 @@ def like_post(request, payload: PostSchema) -> Response:
         return Response({"error": "Post not found"}, status=404)
 
     # Add the logged-in user to the likes_list of the post
-    post.likes_list.add(request.user)
+    message = ""
+    if (not post.likes_list.filter(id=request.user.id).exists()):
+        post.likes_list.add(request.user)
+        message = "Post liked successfully"
+    else:
+        post.likes_list.remove(request.user)
+        message = "Post unliked successfully"
+    post.save()
 
     # Prepare a response message
-    return Response({"success": True, "message": "Post liked successfully"}, status=201)
+    return Response({"success": True, "message": message}, status=201)
 
-@post_router.post("/unlike-post", auth=JWTAuth())
-def unlike_post(request, payload: PostSchema) -> Response:
-    # Ensure the user is authenticated
-    if not request.user.is_authenticated:
-        return Response({"error": "Unauthorized"}, status=401)
+# @post_router.post("/unlike-post", auth=JWTAuth())
+# def unlike_post(request, payload: PostSchema) -> Response:
+#     # Ensure the user is authenticated
+#     if not request.user.is_authenticated:
+#         return Response({"error": "Unauthorized"}, status=401)
 
-    # Retrieve the post using the provided post_id from the payload
-    try:
-        post = Post.objects.get(post_id=payload.post_id)
-    except Post.DoesNotExist:
-        return Response({"error": "Post not found"}, status=404)
+#     # Retrieve the post using the provided post_id from the payload
+#     try:
+#         post = Post.objects.get(post_id=payload.post_id)
+#     except Post.DoesNotExist:
+#         return Response({"error": "Post not found"}, status=404)
 
-    # Remove the logged-in user from the likes_list of the post
-    post.likes_list.remove(request.user)
+#     # Remove the logged-in user from the likes_list of the post
+#     post.likes_list.remove(request.user)
 
-    # Prepare a response message
-    return Response({"success": True, "message": "Post unliked successfully"}, status=200)
+#     # Prepare a response message
+#     return Response({"success": True, "message": "Post unliked successfully"}, status=200)
+
 
 @post_router.post("/make-comment", auth=JWTAuth())
 def create_comment(request, payload: CommentSchema) -> Response:
     # Ensure the user is authenticated
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
-    
+
     # Retrieve the post using the provided post_id
     try:
         post = Post.objects.get(post_id=payload.post_id)
@@ -130,27 +202,28 @@ def create_comment(request, payload: CommentSchema) -> Response:
     }, status=201)
 
 
-@post_router.delete("/delete-comment", auth=JWTAuth())
-def delete_comment(request, comment_id: int) -> Response:
+@post_router.post("/delete-comment", auth=JWTAuth())
+def delete_comment(request, payload: DeleteCommentSchema) -> Response:
     # Ensure the user is authenticated
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
 
     try:
         # Retrieve the comment to be deleted
-        comment = Comment.objects.get(comment_id=comment_id)
-        
+        comment = Comment.objects.get(comment_id=payload.comment_id)
+
         # Check if the authenticated user is the owner of the comment
         if comment.comment_user != request.user and comment.comment_post.user_id != request.user.id:
             return Response({"error": "You do not have permission to delete this comment."}, status=403)
-        
+
         # Delete the comment
         comment.delete()
-        
-        return Response({"success": True, "message": "Comment deleted successfully"}, status=204)
-        
+
+        return Response({"success": True, "message": "Comment deleted successfully"}, status=201)
+
     except Comment.DoesNotExist:
         return Response({"error": "Comment not found"}, status=404)
+
 
 @post_router.post("/create-post", auth=JWTAuth())
 def create_post(request, caption: str = Form(None), post_image: UploadedFile = File(None)) -> Response:
@@ -163,9 +236,10 @@ def create_post(request, caption: str = Form(None), post_image: UploadedFile = F
     if post_image:
         ext = post_image.name.split('.')[-1]  # Get file extension
         image_name = f'posts/{post.post_id}.{ext}'
-        image_path = default_storage.save(image_name, ContentFile(post_image.read()))
+        image_path = default_storage.save(
+            image_name, ContentFile(post_image.read()))
         post.post_image = image_path
-        post.save()  
+        post.save()
 
     return Response({
         "success": True,

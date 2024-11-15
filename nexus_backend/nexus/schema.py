@@ -32,6 +32,9 @@ class CommentSchema(Schema):
     post_id: int
     comment_message: str
 
+class DeletePostSchema(Schema):
+    post_id: int
+
 
 class DeleteCommentSchema(Schema):
     comment_id: int
@@ -48,3 +51,21 @@ class ViewUserStorySchema(Schema):
 
 class SearchUserSchema(Schema):
     username: str
+
+class UnfollowUserSchema(Schema):
+    username: str
+
+class FollowUserSchema(Schema):
+    username: str
+
+
+class EditPostSchema(Schema):
+    post_id: int 
+    caption: str
+
+
+class HideUserFromStorySchema(Schema):
+    story_id: int
+    user_id: int
+
+

@@ -1,12 +1,14 @@
 from ninja import NinjaAPI, Schema, Router, File, Form, UploadedFile
 from ninja.responses import Response
 from rest_framework.permissions import IsAuthenticated
-from .models import Post, UserProfile, Comment
+from .models import Post, UserProfile, Comment, Notification
 from ninja_jwt.authentication import JWTAuth
-from .schema import PostSchema, CommentSchema, DeleteCommentSchema
+from .schema import PostSchema, CommentSchema, DeleteCommentSchema, DeletePostSchema, EditPostSchema
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 import os
+from django.utils import timezone
+from django.utils.timesince import timesince
 from django.conf import settings
 
 
@@ -29,6 +31,7 @@ def get_comments(request, payload: PostSchema) -> Response:
     comments = Comment.objects.filter(comment_post=post)
     print("COM", comments)
 
+    time_ago = timesince(comment.comment_date)
     # Prepare the response data
     response_data = []
     for comment in comments:
@@ -43,7 +46,7 @@ def get_comments(request, payload: PostSchema) -> Response:
             "comment_id": comment.comment_id,
             "comment_user": comment.comment_user.username,
             "comment_message": comment.comment_message,
-            "comment_date": comment.comment_date.isoformat(),
+            "comment_date": time_ago,
             "profile_picture": profile_picture_url
         })
 
@@ -116,7 +119,7 @@ def like_post(request, payload: PostSchema) -> Response:
         "id": post.post_id,
         "user": post.user_id.username,
         "post_image": post_image_url,
-        "created_at": post.post_date.isoformat(),
+        "created_at": timesince(post.post_date),
         "caption": post.caption,
         "likes_count": likes_count,
         "has_liked": current_user_has_liked,
@@ -127,7 +130,6 @@ def like_post(request, payload: PostSchema) -> Response:
 
     # Prepare a response message
     return Response(object_to_return, status=201)
-
 
 @post_router.post("/toggle-like", auth=JWTAuth())
 def like_post(request, payload: PostSchema) -> Response:
@@ -141,18 +143,27 @@ def like_post(request, payload: PostSchema) -> Response:
     except Post.DoesNotExist:
         return Response({"error": "Post not found"}, status=404)
 
-    # Add the logged-in user to the likes_list of the post
+    # Add or remove the logged-in user to the likes_list of the post
     message = ""
-    if (not post.likes_list.filter(id=request.user.id).exists()):
+    if not post.likes_list.filter(id=request.user.id).exists():
         post.likes_list.add(request.user)
         message = "Post liked successfully"
+        Notification.objects.create(
+            notify_from=request.user,  # The user who liked the post
+            notify_to=post.user_id,  # The post owner
+            notify_type="like",
+            notify_text=f"{request.user.username} liked your post.",
+            notify_post=post  # Link to the post
+        )
     else:
         post.likes_list.remove(request.user)
         message = "Post unliked successfully"
+    
     post.save()
 
     # Prepare a response message
     return Response({"success": True, "message": message}, status=201)
+
 
 # @post_router.post("/unlike-post", auth=JWTAuth())
 # def unlike_post(request, payload: PostSchema) -> Response:
@@ -171,7 +182,6 @@ def like_post(request, payload: PostSchema) -> Response:
 
 #     # Prepare a response message
 #     return Response({"success": True, "message": "Post unliked successfully"}, status=200)
-
 
 @post_router.post("/make-comment", auth=JWTAuth())
 def create_comment(request, payload: CommentSchema) -> Response:
@@ -192,14 +202,24 @@ def create_comment(request, payload: CommentSchema) -> Response:
         comment_message=payload.comment_message
     )
 
+    # Create the notification for the post owner
+    notification = Notification.objects.create(
+        notify_from=request.user,
+        notify_to=post.user_id,  # The post owner gets the notification
+        notify_type="comment",
+        notify_text=f"{request.user.username} commented on your post: {payload.comment_message}",
+        notify_post=post
+    )
+
     return Response({
         "success": True,
         "message": "Comment added successfully",
         "comment_id": comment.comment_id,
         "comment_user": comment.comment_user.username,
         "comment_message": comment.comment_message,
-        "comment_date": comment.comment_date.isoformat(),
+        "comment_date": timesince(comment.comment_date)
     }, status=201)
+
 
 
 @post_router.post("/delete-comment", auth=JWTAuth())
@@ -247,3 +267,56 @@ def create_post(request, caption: str = Form(None), post_image: UploadedFile = F
         "post_id": post.post_id,
         "post_image": post.post_image.url if post.post_image else None
     }, status=201)
+
+
+@post_router.delete("/delete-post", auth=JWTAuth())
+def delete_post(request, payload: DeletePostSchema) -> Response:
+    # Ensure the user is authenticated
+    if not request.user.is_authenticated:
+        return Response({"error": "Unauthorized"}, status=401)
+
+    try:
+        post = Post.objects.get(post_id=payload.post_id)
+    except Post.DoesNotExist:
+        return Response({"error": "Post not found"}, status=404)
+
+    if post.user_id != request.user:
+        return Response({"error": "You are not authorized to delete this post"}, status=403)
+
+    if post.post_image:
+        post.post_image.delete(save=False)
+
+    post.delete()
+
+    return Response({
+        "success": True,
+        "message": "Post deleted successfully",
+        "post_id": payload.post_id
+    }, status=200)
+
+
+
+@post_router.post("/edit-post", auth=JWTAuth())
+def edit_post(request, payload: EditPostSchema) -> Response:
+    if not request.user.is_authenticated:
+        return Response({"error": "Unauthorized"}, status=401)
+
+    try:
+        post = Post.objects.get(post_id=payload.post_id)
+    except Post.DoesNotExist:
+        return Response({"success": False, "message": "Post not found"}, status=404)
+
+    # Check if the current user is the owner of the post
+    if post.user_id != request.user:
+        return Response({"success": False, "message": "You are not the owner of this post"}, status=403)
+
+    # Update the caption
+    post.caption = payload.caption
+    post.save()
+
+    return Response({
+        "success": True,
+        "message": "Post updated successfully",
+        "post_id": post.post_id,
+        "new_caption": post.caption
+    }, status=200)

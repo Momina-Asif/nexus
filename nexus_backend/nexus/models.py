@@ -81,6 +81,7 @@ class Story(models.Model):
     story_image = models.ImageField(upload_to='media/story', blank=True, null=True)
     story_time = models.DateTimeField(auto_now_add=True)
     viewed_by = models.ManyToManyField(User, related_name='viewed_by', blank=True)
+    hidden_from = models.ManyToManyField(User, related_name='hidden_from', blank=True)
 
     # Use a function to calculate the default expiration time
     def default_expiration_time():

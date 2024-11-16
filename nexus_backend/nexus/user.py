@@ -175,6 +175,9 @@ def user_profile(request, payload: SearchUserSchema) -> Response:
             }
             for post in posts
         ]
+    is_requested = False
+    if (request.user in user_profile.pending_requests.all()):
+        is_requested = True
 
     user_is_himself = False
     if (request.user == searched_user):
@@ -189,6 +192,7 @@ def user_profile(request, payload: SearchUserSchema) -> Response:
         "posts": posts_data,
         "follows_searched_user": follows_searched_user,
         "searched_user_follows": searched_user_follows,
+        "is_requested": is_requested,
         "user_is_himself": user_is_himself,
         "followers_count": followers_count,
         "following_count": following_count
@@ -216,7 +220,8 @@ def unfollow_user(request, payload: UnfollowUserSchema) -> Response:
     # Get the UserProfile objects for both users
     try:
         user_profile = UserProfile.objects.get(user=request.user)
-        unfollowed_user_profile = UserProfile.objects.get(user=user_to_unfollow)
+        unfollowed_user_profile = UserProfile.objects.get(
+            user=user_to_unfollow)
     except UserProfile.DoesNotExist:
         return Response({"error": "User profile not found for one or both users."}, status=404)
 
@@ -230,6 +235,7 @@ def unfollow_user(request, payload: UnfollowUserSchema) -> Response:
         "success": True,
         "message": f"You have successfully unfollowed {user_to_unfollow.username}."
     }, status=200)
+
 
 @user_router.get("/view-following", auth=JWTAuth())
 def view_following(request, payload: FollowUserSchema) -> Response:
@@ -256,7 +262,8 @@ def view_following(request, payload: FollowUserSchema) -> Response:
         for followed_user in following:
             followed_user_profile = UserProfile.objects.get(user=followed_user)
             profile_image_url = (
-                followed_user_profile.profile_image.url if followed_user_profile.profile_image else f"{settings.MEDIA_URL}profile_images/default.png"
+                followed_user_profile.profile_image.url if followed_user_profile.profile_image else f"{
+                    settings.MEDIA_URL}profile_images/default.png"
             )
 
             following_list.append({
@@ -305,7 +312,8 @@ def follow_user(request, payload: FollowUserSchema) -> Response:
             notify_from=request.user,
             notify_to=user_to_follow,
             notify_type="follow_request",
-            notify_text=f"{request.user.username} has sent you a follow request."
+            notify_text=f"{
+                request.user.username} has sent you a follow request."
         )
 
         return Response({
@@ -313,9 +321,11 @@ def follow_user(request, payload: FollowUserSchema) -> Response:
             "message": f"Follow request sent to {user_to_follow.username}."
         }, status=200)
 
+    followed_user_profile.pending_requests.remove(request.user)
+    followed_user_profile.save()
     return Response({
-        "success": False,
-        "message": f"You have already sent a follow request to {user_to_follow.username}."
+        "success": True,
+        "message": f"You have cancelled a follow request to {user_to_follow.username}."
     }, status=400)
 
 
@@ -341,10 +351,12 @@ def accept_follow_request(request, payload: FollowUserSchema) -> Response:
         return Response({"success": False, "message": "No follow request from this user"}, status=400)
 
     # Update follower and following lists
-    user_profile.pending_requests.remove(requester)  # Remove from pending requests
+    user_profile.pending_requests.remove(
+        requester)  # Remove from pending requests
     user_profile.followers.add(requester)           # Add to followers
     requester_profile = UserProfile.objects.get(user=requester)
-    requester_profile.following.add(request.user)   # Add the current user to requester's following
+    # Add the current user to requester's following
+    requester_profile.following.add(request.user)
 
     # Create a notification for the requester
     Notification.objects.create(
@@ -359,7 +371,8 @@ def accept_follow_request(request, payload: FollowUserSchema) -> Response:
         notify_from=requester,
         notify_to=request.user,
         notify_type="Follow Request Accepted",
-        notify_text=f"You accepted the follow request from {requester.username}"
+        notify_text=f"You accepted the follow request from {
+            requester.username}"
     )
 
     return Response({
@@ -373,24 +386,36 @@ def view_notifications(request) -> Response:
     # Ensure the user is authenticated
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
-    
+
     # Retrieve notifications for the authenticated user
-    notifications = Notification.objects.filter(notify_to=request.user).order_by('-notify_date')  # Get notifications for the user
-    
+    notifications = Notification.objects.filter(notify_to=request.user).order_by(
+        '-notify_time')  # Get notifications for the user
+
     # Prepare the response data
-    response_data = [
-        {
-            "notification_id": notification.id,
+    response_data = []
+
+    for notification in notifications:
+        profile = UserProfile.objects.get(user=notification.notify_from)
+        post_url = None
+        if (notification.notify_type == "like" or notification.notify_type == "comment"):
+            notified_post = Post.objects.get(
+                post_id=notification.notify_post.post_id)
+            post_url = notified_post.post_image.url
+            print("POS", post_url)
+        response_data.append({
             "notify_from": notification.notify_from.username,
             "notify_text": notification.notify_text,
-            "notify_date": timesince(notification.notify_date) + " ago",  # Human-readable time difference
+            # Human-readable time difference
+            "notify_date": timesince(notification.notify_time) + " ago",
             "notify_type": notification.notify_type,
-            "post_id": notification.notify_post.post_id if notification.notify_post else None
-        }
-        for notification in notifications
-    ]
-    
+            "post_id": notification.notify_post.post_id if notification.notify_post else None,
+            "profile_picture": profile.profile_image.url if profile.profile_image else f"{settings.MEDIA_URL}profile_images/default.png",
+            "post_image": post_url
+
+        })
+
     return Response(response_data, status=200)
+
 
 @user_router.get("/view-followers", auth=JWTAuth())
 def view_followers(request, payload: FollowUserSchema) -> Response:
@@ -398,8 +423,8 @@ def view_followers(request, payload: FollowUserSchema) -> Response:
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
 
-    # Extract the username from the 
-    
+    # Extract the username from the
+
     username = payload.username
 
     try:
@@ -418,7 +443,8 @@ def view_followers(request, payload: FollowUserSchema) -> Response:
         for follower in followers:
             follower_profile = UserProfile.objects.get(user=follower)
             profile_image_url = (
-                follower_profile.profile_image.url if follower_profile.profile_image else f"{settings.MEDIA_URL}profile_images/default.png"
+                follower_profile.profile_image.url if follower_profile.profile_image else f"{
+                    settings.MEDIA_URL}profile_images/default.png"
             )
 
             followers_list.append({

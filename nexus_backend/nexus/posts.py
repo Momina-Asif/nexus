@@ -31,7 +31,6 @@ def get_comments(request, payload: PostSchema) -> Response:
     comments = Comment.objects.filter(comment_post=post)
     print("COM", comments)
 
-    time_ago = timesince(comment.comment_date)
     # Prepare the response data
     response_data = []
     for comment in comments:
@@ -42,12 +41,14 @@ def get_comments(request, payload: PostSchema) -> Response:
                 settings.MEDIA_URL}profile_images/default.png"
 
         )
+        time_ago = timesince(comment.comment_date)
         response_data.append({
             "comment_id": comment.comment_id,
             "comment_user": comment.comment_user.username,
             "comment_message": comment.comment_message,
-            "comment_date": time_ago,
-            "profile_picture": profile_picture_url
+            "time_lapsed": time_ago,
+            "profile_picture": profile_picture_url,
+            "is_owner": True if comment.comment_user == request.user or request.user == post.user_id else False
         })
 
     # response_data = [
@@ -123,13 +124,15 @@ def like_post(request, payload: PostSchema) -> Response:
         "caption": post.caption,
         "likes_count": likes_count,
         "has_liked": current_user_has_liked,
-        "profile_picture": profile_picture_url
+        "profile_picture": profile_picture_url,
+        "is_owner": True if post.user_id == request.user else False
     }
 
     # Add the logged-in user to the likes_list of the post
 
     # Prepare a response message
     return Response(object_to_return, status=201)
+
 
 @post_router.post("/toggle-like", auth=JWTAuth())
 def like_post(request, payload: PostSchema) -> Response:
@@ -158,7 +161,7 @@ def like_post(request, payload: PostSchema) -> Response:
     else:
         post.likes_list.remove(request.user)
         message = "Post unliked successfully"
-    
+
     post.save()
 
     # Prepare a response message
@@ -199,7 +202,8 @@ def create_comment(request, payload: CommentSchema) -> Response:
     comment = Comment.objects.create(
         comment_post=post,
         comment_user=request.user,
-        comment_message=payload.comment_message
+        comment_message=payload.comment_message,
+        comment_date=timezone.now()
     )
 
     # Create the notification for the post owner
@@ -207,7 +211,8 @@ def create_comment(request, payload: CommentSchema) -> Response:
         notify_from=request.user,
         notify_to=post.user_id,  # The post owner gets the notification
         notify_type="comment",
-        notify_text=f"{request.user.username} commented on your post: {payload.comment_message}",
+        notify_text=f"{request.user.username} commented on your post: {
+            payload.comment_message}",
         notify_post=post
     )
 
@@ -217,9 +222,8 @@ def create_comment(request, payload: CommentSchema) -> Response:
         "comment_id": comment.comment_id,
         "comment_user": comment.comment_user.username,
         "comment_message": comment.comment_message,
-        "comment_date": timesince(comment.comment_date)
+        "time_lapsed": timesince(comment.comment_date)
     }, status=201)
-
 
 
 @post_router.post("/delete-comment", auth=JWTAuth())
@@ -233,7 +237,7 @@ def delete_comment(request, payload: DeleteCommentSchema) -> Response:
         comment = Comment.objects.get(comment_id=payload.comment_id)
 
         # Check if the authenticated user is the owner of the comment
-        if comment.comment_user != request.user and comment.comment_post.user_id != request.user.id:
+        if comment.comment_user != request.user and comment.comment_post.user_id != request.user:
             return Response({"error": "You do not have permission to delete this comment."}, status=403)
 
         # Delete the comment
@@ -269,7 +273,7 @@ def create_post(request, caption: str = Form(None), post_image: UploadedFile = F
     }, status=201)
 
 
-@post_router.delete("/delete-post", auth=JWTAuth())
+@post_router.post("/delete-post", auth=JWTAuth())
 def delete_post(request, payload: DeletePostSchema) -> Response:
     # Ensure the user is authenticated
     if not request.user.is_authenticated:
@@ -293,7 +297,6 @@ def delete_post(request, payload: DeletePostSchema) -> Response:
         "message": "Post deleted successfully",
         "post_id": payload.post_id
     }, status=200)
-
 
 
 @post_router.post("/edit-post", auth=JWTAuth())

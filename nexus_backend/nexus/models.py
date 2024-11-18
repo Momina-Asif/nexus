@@ -59,6 +59,8 @@ class Message(models.Model):
 
 # Notification Model
 class Notification(models.Model):
+    notification_id = models.AutoField(
+        primary_key=True)
     notify_from = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name='sent_notifications')
     notify_to = models.ForeignKey(

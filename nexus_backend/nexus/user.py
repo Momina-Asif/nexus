@@ -11,7 +11,7 @@ from ninja.errors import HttpError
 from ninja import Schema, File, Form,  UploadedFile
 from typing import Optional
 from ninja import Body
-from .schema import SearchUserSchema, UnfollowUserSchema, FollowUserSchema
+from .schema import SearchUserSchema, UnfollowUserSchema, FollowUserSchema, SearchFollowSchema
 from django.contrib.auth.hashers import make_password
 from django.utils.timesince import timesince
 
@@ -19,7 +19,6 @@ user_router = NinjaAPI(urls_namespace='userAPI')
 
 
 user_router = NinjaAPI(urls_namespace='userAPI')
-
 
 @user_router.post("/edit-profile", auth=JWTAuth())
 def edit_profile(request,
@@ -42,37 +41,35 @@ def edit_profile(request,
         return Response({"error": "User profile not found"}, status=404)
 
     # Check if any data was provided
-    if not any([username, first_name, last_name, bio, profile_picture]):
-        raise HttpError(status_code=400,
-                        detail="Bad request. No data provided.")
+    if not any([username, first_name, last_name, bio, profile_picture, previous_password, new_password]):
+        return Response({"error": "No data provided"}, status=400)
 
-    print(profile_picture)
-
-    # Update fields if provided in the form data
+    # Validate and update fields
     if username:
+        if User.objects.filter(username=username).exclude(id=request.user.id).exists():
+            return Response({"error": "Username is already taken"}, status=400)
         request.user.username = username
+
     if first_name:
         request.user.first_name = first_name
+
     if last_name:
         request.user.last_name = last_name
+
     if bio:
         user_profile.bio = bio
+
     if previous_password and new_password:
-        if (previous_password == request.user.password):
-            request.user.password = make_password(new_password)
-        # else:
-            # send an appropriate error respone
+        if not request.user.check_password(previous_password):
+            return Response({"error": "Previous password is incorrect"}, status=400)
+        request.user.set_password(new_password)
+
     if profile_picture:
-        # If a profile image exists, delete it
         if user_profile.profile_image:
-            user_profile.profile_image.delete(
-                save=False)  # Delete the old image file
-        # Save the new image
+            user_profile.profile_image.delete(save=False)  # Delete the old image file
         image_name = f'profile_images/{request.user.id}.png'
         image_path = default_storage.save(
             image_name, ContentFile(profile_picture.read()))
-        # Assign the new image file to the model field
-
         user_profile.profile_image = image_path
 
     # Save updated user and profile information
@@ -81,8 +78,9 @@ def edit_profile(request,
 
     # Define the profile picture URL with a default fallback
     profile_picture_url = (
-        user_profile.profile_image.url if user_profile.profile_image else f"{
-            settings.MEDIA_URL}profile_images/default.png"
+        user_profile.profile_image.url
+        if user_profile.profile_image
+        else f"{settings.MEDIA_URL}profile_images/default.png"
     )
 
     return Response({
@@ -96,7 +94,6 @@ def edit_profile(request,
             "profile_picture": profile_picture_url,
         }
     }, status=200)
-
 
 @user_router.post("/search-user", auth=JWTAuth())
 def search_user(request, payload: SearchUserSchema) -> Response:
@@ -350,10 +347,16 @@ def accept_follow_request(request, payload: FollowUserSchema) -> Response:
     if requester not in user_profile.pending_requests.all():
         return Response({"success": False, "message": "No follow request from this user"}, status=400)
 
+    # Delete the pending notification (if it exists)
+    Notification.objects.filter(
+        notify_from=requester, 
+        notify_to=request.user, 
+        notify_type="follow_request"
+    ).delete()
+
     # Update follower and following lists
-    user_profile.pending_requests.remove(
-        requester)  # Remove from pending requests
-    user_profile.followers.add(requester)           # Add to followers
+    user_profile.pending_requests.remove(requester)  # Remove from pending requests
+    user_profile.followers.add(requester)             # Add to followers
     requester_profile = UserProfile.objects.get(user=requester)
     # Add the current user to requester's following
     requester_profile.following.add(request.user)
@@ -371,14 +374,14 @@ def accept_follow_request(request, payload: FollowUserSchema) -> Response:
         notify_from=requester,
         notify_to=request.user,
         notify_type="Follow Request Accepted",
-        notify_text=f"You accepted the follow request from {
-            requester.username}"
+        notify_text=f"You accepted the follow request from {requester.username}"
     )
 
     return Response({
         "success": True,
         "message": f"You have accepted the follow request from {payload.username}",
     }, status=200)
+
 
 
 @user_router.get("/view-notifications", auth=JWTAuth())
@@ -458,3 +461,77 @@ def view_followers(request, payload: FollowUserSchema) -> Response:
         }, status=200)
     else:
         return Response({"error": "You are not authorized to view this user's followers"}, status=403)
+
+
+@user_router.post("/search-followers", auth=JWTAuth())
+def search_followers_of_user(request, payload: SearchFollowSchema) -> Response:
+    # Ensure the user is authenticated
+    if not request.user.is_authenticated:
+        return Response({"error": "Unauthorized"}, status=401)
+
+    # Get the target user by username
+    try:
+        target_user = User.objects.get(username=payload.username)
+    except User.DoesNotExist:
+        return Response({"error": "User not found"}, status=404)
+
+    followers = target_user.followers.all()
+
+    # Filter followers by the search string
+    filtered_followers = followers.filter(username__icontains=payload.search_string)
+
+    follower_data = []
+    for follower in filtered_followers:
+        # Check if the follower has a profile image, otherwise set to default
+        follower_profile = UserProfile.objects.get(
+            user=follower) if hasattr(follower, 'userprofile') else None
+        profile_picture_url = (
+            follower_profile.profile_image.url
+            if follower_profile and follower_profile.profile_image
+            else f"{settings.MEDIA_URL}profile_images/default.png"
+        )
+
+        follower_data.append({
+            "username": follower.username,
+            "first_name": follower.first_name,
+            "last_name": follower.last_name,
+            "profile_picture": profile_picture_url,
+        })
+
+    return Response({"followers": follower_data}, status=200)
+
+
+@user_router.post("/search-following", auth=JWTAuth())
+def search_following_of_user(request, payload: SearchFollowSchema) -> Response:
+
+    if not request.user.is_authenticated:
+        return Response({"error": "Unauthorized"}, status=401)
+
+    try:
+        target_user = User.objects.get(username=payload.username)
+    except User.DoesNotExist:
+        return Response({"error": "User not found"}, status=404)
+
+    following = target_user.following.all()
+
+    # Filter the following list by the search string
+    filtered_following = following.filter(username__icontains=payload.search_string)
+
+    following_data = []
+    for user in filtered_following:
+        user_profile = UserProfile.objects.get(
+            user=user) if hasattr(user, 'userprofile') else None
+        profile_picture_url = (
+            user_profile.profile_image.url
+            if user_profile and user_profile.profile_image
+            else f"{settings.MEDIA_URL}profile_images/default.png"
+        )
+
+        following_data.append({
+            "username": user.username,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "profile_picture": profile_picture_url,
+        })
+
+    return Response({"following": following_data}, status=200)

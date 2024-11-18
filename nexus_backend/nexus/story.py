@@ -4,7 +4,7 @@ from ninja_jwt.authentication import JWTAuth
 from .models import Story, UserProfile, User
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
-from .schema import ViewStorySchema, ViewUserStorySchema, HideUserFromStorySchema
+from .schema import ViewStorySchema, ViewUserStorySchema, HideUserFromStorySchema, UpdateStoryVisibilitySchema
 from django.core.exceptions import ObjectDoesNotExist
 from django.conf import settings
 
@@ -205,7 +205,6 @@ def get_story_viewers(request, payload: ViewStorySchema) -> Response:
         return Response({"error": "Unauthorized"}, status=401)
 
     try:
-        # Fetch the story by its ID
         story = Story.objects.get(pk=payload.story_id)
     except Story.DoesNotExist:
         return Response({"error": "Story not found"}, status=404)
@@ -224,3 +223,81 @@ def get_story_viewers(request, payload: ViewStorySchema) -> Response:
         "story_id": payload.story_id,
         "viewed_by": viewers_usernames
     }, status=200)
+
+
+@story_router.post("/visibility", auth=JWTAuth())
+def get_story_visibility(request, payload: ViewStorySchema) -> Response:
+    # Ensure the user is authenticated
+    if not request.user.is_authenticated:
+        return Response({"error": "Unauthorized"}, status=401)
+
+    try:
+        # Fetch the story by its ID
+        story = Story.objects.get(pk=payload.story_id)
+    except Story.DoesNotExist:
+        return Response({"error": "Story not found"}, status=404)
+
+    # Check if the authenticated user is the one who posted the story
+    if request.user != story.story_user:
+        return Response({"error": "You are not authorized to view the visibility of this story"}, status=403)
+
+    # Get the story owner's followers
+    followers = story.story_user.userprofile.followers.all()
+
+    # Get the users the story is hidden from
+    hidden_users = story.hidden_from.all()
+
+    # Prepare the response data
+    visibility_data = []
+    for follower in followers:
+        visibility_data.append({
+            "username": follower.username,
+            "first_name": follower.first_name,
+            "last_name": follower.last_name,
+            "profile_picture": follower.userprofile.profile_image.url if follower.userprofile.profile_image else f"{settings.MEDIA_URL}profile_images/default.png",
+            "is_hidden": follower in hidden_users
+        })
+
+    return Response({
+        "story_id": payload.story_id,
+        "visibility": visibility_data
+    }, status=200)
+
+@story_router.post("/update-visibility", auth=JWTAuth())
+def update_story_visibility(request, payload: UpdateStoryVisibilitySchema) -> Response:
+    # Ensure the user is authenticated
+    if not request.user.is_authenticated:
+        return Response({"error": "Unauthorized"}, status=401)
+
+    try:
+        # Fetch the story by its ID
+        story = Story.objects.get(pk=payload.story_id)
+    except Story.DoesNotExist:
+        return Response({"error": "Story not found"}, status=404)
+
+    # Check if the authenticated user is the one who posted the story
+    if request.user != story.story_user:
+        return Response({"error": "You are not authorized to update the visibility of this story"}, status=403)
+
+    # Get the current list of users the story is hidden from
+    current_hidden_users = set(story.hidden_from.all())
+
+    # Fetch the list of users from the request
+    requested_hidden_users = set(User.objects.filter(username__in=payload.hidden_usernames))
+
+    # Add the new users to the hidden list
+    users_to_hide = requested_hidden_users - current_hidden_users
+    story.hidden_from.add(*users_to_hide)
+
+    # Remove users who are no longer in the hidden list
+    users_to_unhide = current_hidden_users - requested_hidden_users
+    story.hidden_from.remove(*users_to_unhide)
+
+    return Response({
+        "success": True,
+        "message": "Story visibility updated successfully",
+        "hidden_from": [user.username for user in story.hidden_from.all()]
+    }, status=200)
+
+
+

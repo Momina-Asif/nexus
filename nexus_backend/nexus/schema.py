@@ -1,7 +1,7 @@
 from ninja import Schema, File, Form,  UploadedFile
 from typing import Optional
 from ninja.files import UploadedFile
-
+from typing import List
 
 class EditUserSchema(Schema):
     username: str = Form(None)
@@ -68,4 +68,12 @@ class HideUserFromStorySchema(Schema):
     story_id: int
     user_id: int
 
+
+class SearchFollowSchema(Schema):
+    username: str
+    search_string: str
+
+class UpdateStoryVisibilitySchema(Schema):
+    story_id: int
+    hidden_usernames: List[str]  # List of usernames to hide the story from
 

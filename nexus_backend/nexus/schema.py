@@ -75,5 +75,10 @@ class SearchFollowSchema(Schema):
 
 class UpdateStoryVisibilitySchema(Schema):
     story_id: int
-    hidden_usernames: List[str]  # List of usernames to hide the story from
+    hidden_usernames: List[str] 
+
+class SearchViewerSchema(Schema):
+    story_id: int
+    username: str
+
 

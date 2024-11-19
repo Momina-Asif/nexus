@@ -4,7 +4,7 @@ from ninja_jwt.authentication import JWTAuth
 from .models import Story, UserProfile, User
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
-from .schema import ViewStorySchema, ViewUserStorySchema, HideUserFromStorySchema, UpdateStoryVisibilitySchema
+from .schema import ViewStorySchema, ViewUserStorySchema, HideUserFromStorySchema, UpdateStoryVisibilitySchema, SearchViewerSchema
 from django.core.exceptions import ObjectDoesNotExist
 from django.conf import settings
 
@@ -154,7 +154,6 @@ def mark_story_as_viewed(request, payload: ViewStorySchema) -> Response:
         "message": f"added to viewed_by list for story {payload.story_id}"
     }, status=200)
 
-
 @story_router.get("/friends-stories", auth=JWTAuth())
 def get_friends_with_stories(request) -> Response:
     # Ensure the user is authenticated
@@ -167,43 +166,56 @@ def get_friends_with_stories(request) -> Response:
     except UserProfile.DoesNotExist:
         return Response({"error": "User profile not found"}, status=404)
 
-    # Get the user's friends (people they are following)
-    # You can filter this to only the users the current user follows
-    # Assuming user_profile is an instance of UserProfile
-    friends = list(user_profile.following.all())
-    friends.append(request.user)
-
+    # Prepare the list to hold users with stories
     friends_with_stories = []
+
+    # Add the current user's stories to the response first
+    user_stories = Story.objects.filter(
+        story_user=request.user
+    ).exclude(hidden_from=request.user)
+
+    if user_stories.exists():
+        story_index_to_view = sum(
+            1 for story in user_stories if story.viewed_by.filter(id=request.user.id).exists()
+        )
+
+        user_profile_image_url = (
+            user_profile.profile_image.url if user_profile.profile_image else f"{settings.MEDIA_URL}profile_images/default.png"
+        )
+
+        friends_with_stories.append({
+            "username": request.user.username,
+            "user_id": request.user.id,
+            "profile_image": user_profile_image_url,
+            "story_index_to_view": story_index_to_view if story_index_to_view < user_stories.count() else 0,
+            "yet_to_view": story_index_to_view < user_stories.count()
+        })
+
+    # Get the user's friends (people they are following)
+    friends = user_profile.following.all()
+
+    # Add each friend's stories to the response
     for friend in friends:
-        # Fetch the friend's stories that are NOT hidden from the current user
         stories = Story.objects.filter(
-            story_user=friend).exclude(hidden_from=request.user)
-        # own_stories = Story.objects.filter(
-        #     story_user=request.user)
-        # print("OWN", own_stories)
+            story_user=friend
+        ).exclude(hidden_from=request.user)
 
         if stories.exists():
-            story_index_to_view = 0
-            for story in stories:
-                if story.viewed_by.filter(id=request.user.id).exists():
-                    story_index_to_view += 1
-
-            # If the friend has posted stories, retrieve their profile
-            friend_profile = UserProfile.objects.get(user=friend)
-
-            # Handle the profile image URL
-            profile_image_url = (
-                friend_profile.profile_image.url if friend_profile.profile_image else f"{
-                    settings.MEDIA_URL}profile_images/default.png"
+            story_index_to_view = sum(
+                1 for story in stories if story.viewed_by.filter(id=request.user.id).exists()
             )
 
-            # Prepare the data for the response
+            friend_profile = UserProfile.objects.get(user=friend)
+            profile_image_url = (
+                friend_profile.profile_image.url if friend_profile.profile_image else f"{settings.MEDIA_URL}profile_images/default.png"
+            )
+
             friends_with_stories.append({
                 "username": friend.username,
                 "user_id": friend.id,
                 "profile_image": profile_image_url,
-                "story_index_to_view": story_index_to_view if story_index_to_view < stories.__len__() else 0,
-                "yet_to_view": False if story_index_to_view == stories.__len__() else True
+                "story_index_to_view": story_index_to_view if story_index_to_view < stories.count() else 0,
+                "yet_to_view": story_index_to_view < stories.count()
             })
 
     return Response({
@@ -320,4 +332,75 @@ def update_story_visibility(request, payload: UpdateStoryVisibilitySchema) -> Re
         "success": True,
         "message": "Story visibility updated successfully",
         "hidden_from": [user.username for user in story.hidden_from.all()]
+    }, status=200)
+
+
+@story_router.post("/delete-story", auth=JWTAuth())
+def delete_story(request, payload: ViewStorySchema) -> Response:
+    # Ensure the user is authenticated
+    if not request.user.is_authenticated:
+        return Response({"error": "Unauthorized"}, status=401)
+
+    try:
+        # Fetch the story by its ID
+        story = Story.objects.get(pk=payload.story_id)
+    except Story.DoesNotExist:
+        return Response({"error": "Story not found"}, status=404)
+
+    # Check if the authenticated user is the owner of the story
+    if request.user != story.story_user:
+        return Response({
+            "error": "You are not authorized to delete this story"
+            }, status=403)
+
+    # Delete the story
+    story.delete()
+
+    return Response({
+        "success": True,
+        "message": "Story deleted successfully"
+    }, status=200)
+
+
+@story_router.post("/search-viewer", auth=JWTAuth())
+def search_story_viewer(request, payload: SearchViewerSchema) -> Response:
+    # Ensure the user is authenticated
+    if not request.user.is_authenticated:
+        return Response({"error": "Unauthorized"}, status=401)
+
+    try:
+        # Fetch the story by its ID
+        story = Story.objects.get(pk=payload.story_id)
+    except Story.DoesNotExist:
+        return Response({"error": "Story not found"}, status=404)
+
+    # Check if the authenticated user is the owner of the story
+    if request.user != story.story_user:
+        return Response({"error": "You are not authorized to view viewers of this story"}, status=403)
+
+    # Search for the user in the viewers of the story
+    viewers = story.viewed_by.filter(username__icontains=payload.username)
+
+    # Prepare the response with viewer data
+    viewers_data = []
+    for viewer in viewers:
+        try:
+            viewer_profile = UserProfile.objects.get(user=viewer)
+            profile_image_url = (
+                viewer_profile.profile_image.url if viewer_profile.profile_image else f"{settings.MEDIA_URL}profile_images/default.png"
+            )
+        except UserProfile.DoesNotExist:
+            profile_image_url = f"{settings.MEDIA_URL}profile_images/default.png"
+
+        viewers_data.append({
+            "id": viewer.id,
+            "username": viewer.username,
+            "first_name": viewer_profile.first_name if viewer_profile else "User",
+            "last_name": viewer_profile.last_name if viewer_profile else "",
+            "profile_image": profile_image_url,
+        })
+
+    return Response({
+        "success": True,
+        "viewers": viewers_data
     }, status=200)

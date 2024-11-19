@@ -100,10 +100,13 @@ def edit_profile(request,
 
 @user_router.post("/search-user", auth=JWTAuth())
 def search_user(request, payload: SearchUserSchema) -> Response:
-
     # Ensure the user is authenticated
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
+
+    # Return an empty array if the username is an empty string
+    if not payload.username.strip():
+        return Response({"users": []}, status=200)
 
     # Filter users by username containing the search query
     users = User.objects.filter(username__icontains=payload.username)
@@ -115,12 +118,9 @@ def search_user(request, payload: SearchUserSchema) -> Response:
         user_profile = UserProfile.objects.get(
             user=user) if hasattr(user, 'userprofile') else None
         profile_picture_url = (
-            user_profile.profile_image.url if user_profile and user_profile.profile_image else f"{
-                settings.MEDIA_URL}profile_images/default.png"
+            user_profile.profile_image.url if user_profile and user_profile.profile_image else f"{settings.MEDIA_URL}profile_images/default.png"
         )
-        is_following = False
-        if (request.user.following.filter(id=user.id).exists()):
-            is_following = True
+        is_following = request.user.following.filter(id=user.id).exists()
 
         user_data.append({
             "username": user.username,
@@ -130,8 +130,9 @@ def search_user(request, payload: SearchUserSchema) -> Response:
             "is_following": is_following
         })
 
-    # Return the response with matching users and status code 200
+    # Return the response with matching users
     return Response({"users": user_data}, status=200)
+
 
 
 @user_router.post("/user-profile", auth=JWTAuth())

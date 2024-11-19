@@ -329,3 +329,43 @@ def edit_post(request, payload: EditPostSchema) -> Response:
         "post_id": post.post_id,
         "new_caption": post.caption
     }, status=200)
+
+
+@post_router.post("/search-like", auth=JWTAuth())
+def search_user_in_post_likes(request, payload: PostSchema) -> Response:
+    # Ensure the user is authenticated
+    if not request.user.is_authenticated:
+        return Response({"error": "Unauthorized"}, status=401)
+
+    try:
+        # Fetch the post by its ID
+        post = Post.objects.get(pk=payload.post_id)
+    except Post.DoesNotExist:
+        return Response({"error": "Post not found"}, status=404)
+
+    # Search for users in the likes of the post
+    liked_users = post.likes_list.filter(username__icontains=payload.username)
+
+    liked_users_data = []
+    for user in liked_users:
+        try:
+            user_profile = UserProfile.objects.get(user=user)
+            profile_image_url = (
+                user_profile.profile_image.url if user_profile.profile_image else f"{settings.MEDIA_URL}profile_images/default.png"
+            )
+        except UserProfile.DoesNotExist:
+            profile_image_url = f"{settings.MEDIA_URL}profile_images/default.png"
+
+        liked_users_data.append({
+            "username": user.username,
+            "first_name": user_profile.first_name if user_profile else "User",
+            "last_name": user_profile.last_name if user_profile else "",
+            "profile_image": profile_image_url,
+        })
+
+    return Response({
+        "success": True,
+        "liked_users": liked_users_data
+    }, status=200)
+
+

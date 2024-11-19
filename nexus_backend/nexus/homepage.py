@@ -27,12 +27,12 @@ def get_homepage_posts(request) -> Response:
 
     following_and_self = list(following_users) + [request.user]
 
-    posts = Post.objects.all().order_by('-post_date')
-    # posts = Post.objects.filter(
-    #     user_id__in=following_and_self).order_by('-post_date')
+    # posts = Post.objects.all().order_by('-post_date')
+    posts = Post.objects.filter(
+        user_id__in=following_and_self).order_by('-post_date')
 
-    if not posts.exists():
-        return Response({"message": "No posts available."}, status=200)
+    # if not posts.exists():
+    #     return Response({"message": "No posts available."}, status=200)
 
     response_data = []
     for post in posts:

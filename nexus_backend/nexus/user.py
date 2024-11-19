@@ -20,6 +20,7 @@ user_router = NinjaAPI(urls_namespace='userAPI')
 
 user_router = NinjaAPI(urls_namespace='userAPI')
 
+
 @user_router.post("/edit-profile", auth=JWTAuth())
 def edit_profile(request,
                  username: str = Form(None),
@@ -66,7 +67,8 @@ def edit_profile(request,
 
     if profile_picture:
         if user_profile.profile_image:
-            user_profile.profile_image.delete(save=False)  # Delete the old image file
+            user_profile.profile_image.delete(
+                save=False)  # Delete the old image file
         image_name = f'profile_images/{request.user.id}.png'
         image_path = default_storage.save(
             image_name, ContentFile(profile_picture.read()))
@@ -94,6 +96,7 @@ def edit_profile(request,
             "profile_picture": profile_picture_url,
         }
     }, status=200)
+
 
 @user_router.post("/search-user", auth=JWTAuth())
 def search_user(request, payload: SearchUserSchema) -> Response:
@@ -266,7 +269,7 @@ def view_following(request, payload: FollowUserSchema) -> Response:
             following_list.append({
                 "username": followed_user.username,
                 "user_id": followed_user.id,
-                "profile_image": profile_image_url
+                "profile_picture": profile_image_url
             })
 
         return Response({
@@ -318,12 +321,54 @@ def follow_user(request, payload: FollowUserSchema) -> Response:
             "message": f"Follow request sent to {user_to_follow.username}."
         }, status=200)
 
+    # Notification.objects.filter(
+    #     notify_from=request.user,
+    #     notify_to=user_to_follow,
+    #     notify_type="follow_request"
+    # ).delete()
+
     followed_user_profile.pending_requests.remove(request.user)
     followed_user_profile.save()
     return Response({
         "success": True,
         "message": f"You have cancelled a follow request to {user_to_follow.username}."
-    }, status=400)
+    }, status=200)
+
+
+@user_router.post("/cancel-request", auth=JWTAuth())
+def cancel_request(request, payload: FollowUserSchema) -> Response:
+    # Ensure the user is authenticated
+    if not request.user.is_authenticated:
+        return Response({"error": "Unauthorized"}, status=401)
+
+    # Check if the user to follow exists
+    try:
+        user_to_cancel = User.objects.get(username=payload.username)
+    except User.DoesNotExist:
+        return Response({"error": "User not found"}, status=404)
+
+    # Get the UserProfile objects for both users
+    try:
+        user_profile = UserProfile.objects.get(user=request.user)
+        cancelled_user_profile = UserProfile.objects.get(user=user_to_cancel)
+    except UserProfile.DoesNotExist:
+        return Response({"error": "User profile not found for one or both users."}, status=404)
+
+    requester = User.objects.get(username=payload.username)
+
+    Notification.objects.filter(
+        notify_from=requester,
+        notify_to=request.user,
+        notify_type="follow_request"
+    ).delete()
+    user_profile.pending_requests.remove(requester)
+    cancelled_user_profile.sent_requests.remove(request.user)
+    cancelled_user_profile.save()
+    user_profile.save()
+    return Response({
+        "success": True,
+        "message": f"You have cancelled a follow request to {user_to_cancel.username}."
+    }, status=200)
 
 
 @user_router.post("/accept-follow-request", auth=JWTAuth())
@@ -349,17 +394,22 @@ def accept_follow_request(request, payload: FollowUserSchema) -> Response:
 
     # Delete the pending notification (if it exists)
     Notification.objects.filter(
-        notify_from=requester, 
-        notify_to=request.user, 
+        notify_from=requester,
+        notify_to=request.user,
         notify_type="follow_request"
     ).delete()
 
     # Update follower and following lists
-    user_profile.pending_requests.remove(requester)  # Remove from pending requests
+    user_profile.pending_requests.remove(
+        requester)  # Remove from pending requests
     user_profile.followers.add(requester)             # Add to followers
     requester_profile = UserProfile.objects.get(user=requester)
     # Add the current user to requester's following
     requester_profile.following.add(request.user)
+    requester_profile.sent_requests.remove(request.user)
+
+    user_profile.save()
+    requester_profile.save()
 
     # Create a notification for the requester
     Notification.objects.create(
@@ -374,14 +424,14 @@ def accept_follow_request(request, payload: FollowUserSchema) -> Response:
         notify_from=requester,
         notify_to=request.user,
         notify_type="Follow Request Accepted",
-        notify_text=f"You accepted the follow request from {requester.username}"
+        notify_text=f"You accepted the follow request from {
+            requester.username}"
     )
 
     return Response({
         "success": True,
         "message": f"You have accepted the follow request from {payload.username}",
     }, status=200)
-
 
 
 @user_router.get("/view-notifications", auth=JWTAuth())
@@ -465,40 +515,38 @@ def view_followers(request, payload: FollowUserSchema) -> Response:
 
 @user_router.post("/search-followers", auth=JWTAuth())
 def search_followers_of_user(request, payload: SearchFollowSchema) -> Response:
-    # Ensure the user is authenticated
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
 
-    # Get the target user by username
     try:
         target_user = User.objects.get(username=payload.username)
     except User.DoesNotExist:
         return Response({"error": "User not found"}, status=404)
 
-    followers = target_user.followers.all()
+    target_user_profile = UserProfile.objects.get(user=target_user)
 
-    # Filter followers by the search string
-    filtered_followers = followers.filter(username__icontains=payload.search_string)
+    followers = target_user_profile.followers.all()
 
-    follower_data = []
-    for follower in filtered_followers:
-        # Check if the follower has a profile image, otherwise set to default
-        follower_profile = UserProfile.objects.get(
-            user=follower) if hasattr(follower, 'userprofile') else None
+    # Filter the followers list by the search string
+    filtered_followers = followers.filter(
+        username__icontains=payload.search_string)
+
+    followers_data = []
+    for user in filtered_followers:
+        user_profile = UserProfile.objects.get(
+            user=user) if hasattr(user, 'userprofile') else None
         profile_picture_url = (
-            follower_profile.profile_image.url
-            if follower_profile and follower_profile.profile_image
+            user_profile.profile_image.url
+            if user_profile and user_profile.profile_image
             else f"{settings.MEDIA_URL}profile_images/default.png"
         )
 
-        follower_data.append({
-            "username": follower.username,
-            "first_name": follower.first_name,
-            "last_name": follower.last_name,
+        followers_data.append({
+            "username": user_profile.user.username,
             "profile_picture": profile_picture_url,
         })
 
-    return Response({"followers": follower_data}, status=200)
+    return Response({"followers": followers_data}, status=200)
 
 
 @user_router.post("/search-following", auth=JWTAuth())
@@ -512,10 +560,13 @@ def search_following_of_user(request, payload: SearchFollowSchema) -> Response:
     except User.DoesNotExist:
         return Response({"error": "User not found"}, status=404)
 
-    following = target_user.following.all()
+    target_user_profile = UserProfile.objects.get(user=target_user)
+
+    following = target_user_profile.following.all()
 
     # Filter the following list by the search string
-    filtered_following = following.filter(username__icontains=payload.search_string)
+    filtered_following = following.filter(
+        username__icontains=payload.search_string)
 
     following_data = []
     for user in filtered_following:
@@ -528,9 +579,7 @@ def search_following_of_user(request, payload: SearchFollowSchema) -> Response:
         )
 
         following_data.append({
-            "username": user.username,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
+            "username": user_profile.user.username,
             "profile_picture": profile_picture_url,
         })
 

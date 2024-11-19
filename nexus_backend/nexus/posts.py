@@ -79,14 +79,20 @@ def get_likes(request, payload: PostSchema) -> Response:
     # Get the users who liked the post
     liked_users = post.likes_list.all()
 
-    # Prepare the response data
-    response_data = [
-        {
-            "user_id": user.id,
+    response_data = []
+
+    for user in liked_users:
+        liked_user_profile = UserProfile.objects.get(user=user)
+        profile_image_url = (
+            liked_user_profile.profile_image.url if liked_user_profile.profile_image else f"{
+                settings.MEDIA_URL}profile_images/default.png"
+        )
+        response_data.append({
             "username": user.username,
-        }
-        for user in liked_users
-    ]
+            "profile_picture": profile_image_url
+        })
+
+    # Prepare the response data
 
     return Response(response_data, status=200)
 

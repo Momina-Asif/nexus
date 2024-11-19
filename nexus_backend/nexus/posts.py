@@ -3,7 +3,7 @@ from ninja.responses import Response
 from rest_framework.permissions import IsAuthenticated
 from .models import Post, UserProfile, Comment, Notification
 from ninja_jwt.authentication import JWTAuth
-from .schema import PostSchema, CommentSchema, DeleteCommentSchema, DeletePostSchema, EditPostSchema
+from .schema import PostSchema, CommentSchema, DeleteCommentSchema, DeletePostSchema, EditPostSchema, SearchLikeSchema
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 import os
@@ -29,7 +29,6 @@ def get_comments(request, payload: PostSchema) -> Response:
 
     # Get comments related to the post
     comments = Comment.objects.filter(comment_post=post)
-    print("COM", comments)
 
     # Prepare the response data
     response_data = []
@@ -64,37 +63,37 @@ def get_comments(request, payload: PostSchema) -> Response:
     return Response(response_data, status=200)
 
 
-@post_router.post("/view-likes", auth=JWTAuth())
-def get_likes(request, payload: PostSchema) -> Response:
-    # Ensure the user is authenticated
-    if not request.user.is_authenticated:
-        return Response({"error": "Unauthorized"}, status=401)
+# @post_router.post("/view-likes", auth=JWTAuth())
+# def get_likes(request, payload: PostSchema) -> Response:
+#     # Ensure the user is authenticated
+#     if not request.user.is_authenticated:
+#         return Response({"error": "Unauthorized"}, status=401)
 
-    # Retrieve the post using the provided post_id from the payload
-    try:
-        post = Post.objects.get(post_id=payload.post_id)
-    except Post.DoesNotExist:
-        return Response({"error": "Post not found"}, status=404)
+#     # Retrieve the post using the provided post_id from the payload
+#     try:
+#         post = Post.objects.get(post_id=payload.post_id)
+#     except Post.DoesNotExist:
+#         return Response({"error": "Post not found"}, status=404)
 
-    # Get the users who liked the post
-    liked_users = post.likes_list.all()
+#     # Get the users who liked the post
+#     liked_users = post.likes_list.all()
 
-    response_data = []
+#     response_data = []
 
-    for user in liked_users:
-        liked_user_profile = UserProfile.objects.get(user=user)
-        profile_image_url = (
-            liked_user_profile.profile_image.url if liked_user_profile.profile_image else f"{
-                settings.MEDIA_URL}profile_images/default.png"
-        )
-        response_data.append({
-            "username": user.username,
-            "profile_picture": profile_image_url
-        })
+#     for user in liked_users:
+#         liked_user_profile = UserProfile.objects.get(user=user)
+#         profile_image_url = (
+#             liked_user_profile.profile_image.url if liked_user_profile.profile_image else f"{
+#                 settings.MEDIA_URL}profile_images/default.png"
+#         )
+#         response_data.append({
+#             "username": user.username,
+#             "profile_picture": profile_image_url
+#         })
 
-    # Prepare the response data
+#     # Prepare the response data
 
-    return Response(response_data, status=200)
+#     return Response(response_data, status=200)
 
 
 @post_router.post("/get-post", auth=JWTAuth())
@@ -332,7 +331,7 @@ def edit_post(request, payload: EditPostSchema) -> Response:
 
 
 @post_router.post("/search-like", auth=JWTAuth())
-def search_user_in_post_likes(request, payload: PostSchema) -> Response:
+def search_user_in_post_likes(request, payload: SearchLikeSchema) -> Response:
     # Ensure the user is authenticated
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
@@ -351,21 +350,19 @@ def search_user_in_post_likes(request, payload: PostSchema) -> Response:
         try:
             user_profile = UserProfile.objects.get(user=user)
             profile_image_url = (
-                user_profile.profile_image.url if user_profile.profile_image else f"{settings.MEDIA_URL}profile_images/default.png"
+                user_profile.profile_image.url if user_profile.profile_image else f"{
+                    settings.MEDIA_URL}profile_images/default.png"
             )
         except UserProfile.DoesNotExist:
-            profile_image_url = f"{settings.MEDIA_URL}profile_images/default.png"
+            profile_image_url = f"{
+                settings.MEDIA_URL}profile_images/default.png"
 
         liked_users_data.append({
             "username": user.username,
-            "first_name": user_profile.first_name if user_profile else "User",
-            "last_name": user_profile.last_name if user_profile else "",
-            "profile_image": profile_image_url,
+            "profile_picture": profile_image_url,
         })
 
     return Response({
         "success": True,
         "liked_users": liked_users_data
     }, status=200)
-
-

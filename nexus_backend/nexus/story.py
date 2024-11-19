@@ -127,7 +127,6 @@ def get_user_stories(request, payload: ViewUserStorySchema) -> Response:
 @story_router.post("/view-story", auth=JWTAuth())
 def mark_story_as_viewed(request, payload: ViewStorySchema) -> Response:
     # Ensure the user is authenticated
-    print("IN")
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
 
@@ -153,6 +152,7 @@ def mark_story_as_viewed(request, payload: ViewStorySchema) -> Response:
         "success": True,
         "message": f"added to viewed_by list for story {payload.story_id}"
     }, status=200)
+
 
 @story_router.get("/friends-stories", auth=JWTAuth())
 def get_friends_with_stories(request) -> Response:
@@ -180,7 +180,8 @@ def get_friends_with_stories(request) -> Response:
         )
 
         user_profile_image_url = (
-            user_profile.profile_image.url if user_profile.profile_image else f"{settings.MEDIA_URL}profile_images/default.png"
+            user_profile.profile_image.url if user_profile.profile_image else f"{
+                settings.MEDIA_URL}profile_images/default.png"
         )
 
         friends_with_stories.append({
@@ -207,7 +208,8 @@ def get_friends_with_stories(request) -> Response:
 
             friend_profile = UserProfile.objects.get(user=friend)
             profile_image_url = (
-                friend_profile.profile_image.url if friend_profile.profile_image else f"{settings.MEDIA_URL}profile_images/default.png"
+                friend_profile.profile_image.url if friend_profile.profile_image else f"{
+                    settings.MEDIA_URL}profile_images/default.png"
             )
 
             friends_with_stories.append({
@@ -223,41 +225,41 @@ def get_friends_with_stories(request) -> Response:
     }, status=200)
 
 
-@story_router.post("/viewers", auth=JWTAuth())
-def get_story_viewers(request, payload: ViewStorySchema) -> Response:
-    # Ensure the user is authenticated
-    if not request.user.is_authenticated:
-        return Response({"error": "Unauthorized"}, status=401)
+# @story_router.post("/viewers", auth=JWTAuth())
+# def get_story_viewers(request, payload: ViewStorySchema) -> Response:
+#     # Ensure the user is authenticated
+#     if not request.user.is_authenticated:
+#         return Response({"error": "Unauthorized"}, status=401)
 
-    try:
-        story = Story.objects.get(pk=payload.story_id)
-    except Story.DoesNotExist:
-        return Response({"error": "Story not found"}, status=404)
+#     try:
+#         story = Story.objects.get(pk=payload.story_id)
+#     except Story.DoesNotExist:
+#         return Response({"error": "Story not found"}, status=404)
 
-    # Check if the authenticated user is the one who posted the story
-    if request.user != story.story_user:
-        return Response({"error": "You are not authorized to view the viewers of this story"}, status=403)
+#     # Check if the authenticated user is the one who posted the story
+#     if request.user != story.story_user:
+#         return Response({"error": "You are not authorized to view the viewers of this story"}, status=403)
 
-    # Get the viewers of the story (the users who have viewed the story)
-    viewers = story.viewed_by.all()
+#     # Get the viewers of the story (the users who have viewed the story)
+#     viewers = story.viewed_by.all()
 
-    # Prepare the response with the usernames of users who have viewed the story
-    viewers_list = []
-    for viewer in viewers:
-        viewer_profile = UserProfile.objects.get(user=viewer)
-        profile_image_url = (
-            viewer_profile.profile_image.url if viewer_profile.profile_image else f"{
-                settings.MEDIA_URL}profile_images/default.png"
-        )
-        viewers_list.append({
-            "username": viewer.username,
-            "profile_picture": profile_image_url
-        })
+#     # Prepare the response with the usernames of users who have viewed the story
+#     viewers_list = []
+#     for viewer in viewers:
+#         viewer_profile = UserProfile.objects.get(user=viewer)
+#         profile_image_url = (
+#             viewer_profile.profile_image.url if viewer_profile.profile_image else f"{
+#                 settings.MEDIA_URL}profile_images/default.png"
+#         )
+#         viewers_list.append({
+#             "username": viewer.username,
+#             "profile_picture": profile_image_url
+#         })
 
-    return Response({
-        "story_id": payload.story_id,
-        "viewers_list": viewers_list
-    }, status=200)
+#     return Response({
+#         "story_id": payload.story_id,
+#         "viewers_list": viewers_list
+#     }, status=200)
 
 
 @story_router.post("/visibility", auth=JWTAuth())
@@ -351,7 +353,7 @@ def delete_story(request, payload: ViewStorySchema) -> Response:
     if request.user != story.story_user:
         return Response({
             "error": "You are not authorized to delete this story"
-            }, status=403)
+        }, status=403)
 
     # Delete the story
     story.delete()
@@ -387,17 +389,17 @@ def search_story_viewer(request, payload: SearchViewerSchema) -> Response:
         try:
             viewer_profile = UserProfile.objects.get(user=viewer)
             profile_image_url = (
-                viewer_profile.profile_image.url if viewer_profile.profile_image else f"{settings.MEDIA_URL}profile_images/default.png"
+                viewer_profile.profile_image.url if viewer_profile.profile_image else f"{
+                    settings.MEDIA_URL}profile_images/default.png"
             )
         except UserProfile.DoesNotExist:
-            profile_image_url = f"{settings.MEDIA_URL}profile_images/default.png"
+            profile_image_url = f"{
+                settings.MEDIA_URL}profile_images/default.png"
 
         viewers_data.append({
             "id": viewer.id,
             "username": viewer.username,
-            "first_name": viewer_profile.first_name if viewer_profile else "User",
-            "last_name": viewer_profile.last_name if viewer_profile else "",
-            "profile_image": profile_image_url,
+            "profile_picture": profile_image_url,
         })
 
     return Response({

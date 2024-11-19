@@ -69,7 +69,9 @@ def edit_profile(request,
         if user_profile.profile_image:
             user_profile.profile_image.delete(
                 save=False)  # Delete the old image file
-        image_name = f'profile_images/{request.user.id}.png'
+
+        extension = profile_picture.name.split(".")[-1]
+        image_name = f'profile_images/{request.user.id}.{extension}'
         image_path = default_storage.save(
             image_name, ContentFile(profile_picture.read()))
         user_profile.profile_image = image_path
@@ -118,7 +120,8 @@ def search_user(request, payload: SearchUserSchema) -> Response:
         user_profile = UserProfile.objects.get(
             user=user) if hasattr(user, 'userprofile') else None
         profile_picture_url = (
-            user_profile.profile_image.url if user_profile and user_profile.profile_image else f"{settings.MEDIA_URL}profile_images/default.png"
+            user_profile.profile_image.url if user_profile and user_profile.profile_image else f"{
+                settings.MEDIA_URL}profile_images/default.png"
         )
         is_following = request.user.following.filter(id=user.id).exists()
 
@@ -132,7 +135,6 @@ def search_user(request, payload: SearchUserSchema) -> Response:
 
     # Return the response with matching users
     return Response({"users": user_data}, status=200)
-
 
 
 @user_router.post("/user-profile", auth=JWTAuth())
@@ -238,46 +240,46 @@ def unfollow_user(request, payload: UnfollowUserSchema) -> Response:
     }, status=200)
 
 
-@user_router.get("/view-following", auth=JWTAuth())
-def view_following(request, payload: FollowUserSchema) -> Response:
-    # Ensure the user is authenticated
-    if not request.user.is_authenticated:
-        return Response({"error": "Unauthorized"}, status=401)
+# @user_router.get("/view-following", auth=JWTAuth())
+# def view_following(request, payload: FollowUserSchema) -> Response:
+#     # Ensure the user is authenticated
+#     if not request.user.is_authenticated:
+#         return Response({"error": "Unauthorized"}, status=401)
 
-    # Extract the username from the payload
-    username = payload.username
+#     # Extract the username from the payload
+#     username = payload.username
 
-    try:
-        # Fetch the user profile of the requested user
-        user_profile = UserProfile.objects.get(user__username=username)
-    except UserProfile.DoesNotExist:
-        return Response({"error": "User profile not found"}, status=404)
+#     try:
+#         # Fetch the user profile of the requested user
+#         user_profile = UserProfile.objects.get(user__username=username)
+#     except UserProfile.DoesNotExist:
+#         return Response({"error": "User profile not found"}, status=404)
 
-    # Check if the requested user is followed by the authenticated user or is the authenticated user
-    if request.user == user_profile.user or user_profile.user in request.user.following.all():
-        # Retrieve the following list of the requested user
-        following = user_profile.user.following.all()
+#     # Check if the requested user is followed by the authenticated user or is the authenticated user
+#     if request.user == user_profile.user or user_profile.user in request.user.following.all():
+#         # Retrieve the following list of the requested user
+#         following = user_profile.user.following.all()
 
-        # Prepare the list of people the user is following with necessary details
-        following_list = []
-        for followed_user in following:
-            followed_user_profile = UserProfile.objects.get(user=followed_user)
-            profile_image_url = (
-                followed_user_profile.profile_image.url if followed_user_profile.profile_image else f"{
-                    settings.MEDIA_URL}profile_images/default.png"
-            )
+#         # Prepare the list of people the user is following with necessary details
+#         following_list = []
+#         for followed_user in following:
+#             followed_user_profile = UserProfile.objects.get(user=followed_user)
+#             profile_image_url = (
+#                 followed_user_profile.profile_image.url if followed_user_profile.profile_image else f"{
+#                     settings.MEDIA_URL}profile_images/default.png"
+#             )
 
-            following_list.append({
-                "username": followed_user.username,
-                "user_id": followed_user.id,
-                "profile_picture": profile_image_url
-            })
+#             following_list.append({
+#                 "username": followed_user.username,
+#                 "user_id": followed_user.id,
+#                 "profile_picture": profile_image_url
+#             })
 
-        return Response({
-            "following": following_list
-        }, status=200)
-    else:
-        return Response({"error": "You are not authorized to view this user's following list"}, status=403)
+#         return Response({
+#             "following": following_list
+#         }, status=200)
+#     else:
+#         return Response({"error": "You are not authorized to view this user's following list"}, status=403)
 
 
 @user_router.post("/follow", auth=JWTAuth())
@@ -455,7 +457,6 @@ def view_notifications(request) -> Response:
             notified_post = Post.objects.get(
                 post_id=notification.notify_post.post_id)
             post_url = notified_post.post_image.url
-            print("POS", post_url)
         response_data.append({
             "notify_from": notification.notify_from.username,
             "notify_text": notification.notify_text,
@@ -471,47 +472,47 @@ def view_notifications(request) -> Response:
     return Response(response_data, status=200)
 
 
-@user_router.get("/view-followers", auth=JWTAuth())
-def view_followers(request, payload: FollowUserSchema) -> Response:
-    # Ensure the user is authenticated
-    if not request.user.is_authenticated:
-        return Response({"error": "Unauthorized"}, status=401)
+# @user_router.get("/view-followers", auth=JWTAuth())
+# def view_followers(request, payload: FollowUserSchema) -> Response:
+#     # Ensure the user is authenticated
+#     if not request.user.is_authenticated:
+#         return Response({"error": "Unauthorized"}, status=401)
 
-    # Extract the username from the
+#     # Extract the username from the
 
-    username = payload.username
+#     username = payload.username
 
-    try:
-        # Fetch the user profile of the requested user
-        user_profile = UserProfile.objects.get(user__username=username)
-    except UserProfile.DoesNotExist:
-        return Response({"error": "User profile not found"}, status=404)
+#     try:
+#         # Fetch the user profile of the requested user
+#         user_profile = UserProfile.objects.get(user__username=username)
+#     except UserProfile.DoesNotExist:
+#         return Response({"error": "User profile not found"}, status=404)
 
-    # Check if the requested user is followed by the authenticated user or is the authenticated user
-    if request.user == user_profile.user or user_profile.user in request.user.following.all():
-        # Retrieve the followers of the requested user
-        followers = user_profile.user.followers.all()
+#     # Check if the requested user is followed by the authenticated user or is the authenticated user
+#     if request.user == user_profile.user or user_profile.user in request.user.following.all():
+#         # Retrieve the followers of the requested user
+#         followers = user_profile.user.followers.all()
 
-        # Prepare the list of followers with necessary details
-        followers_list = []
-        for follower in followers:
-            follower_profile = UserProfile.objects.get(user=follower)
-            profile_image_url = (
-                follower_profile.profile_image.url if follower_profile.profile_image else f"{
-                    settings.MEDIA_URL}profile_images/default.png"
-            )
+#         # Prepare the list of followers with necessary details
+#         followers_list = []
+#         for follower in followers:
+#             follower_profile = UserProfile.objects.get(user=follower)
+#             profile_image_url = (
+#                 follower_profile.profile_image.url if follower_profile.profile_image else f"{
+#                     settings.MEDIA_URL}profile_images/default.png"
+#             )
 
-            followers_list.append({
-                "username": follower.username,
-                "user_id": follower.id,
-                "profile_image": profile_image_url
-            })
+#             followers_list.append({
+#                 "username": follower.username,
+#                 "user_id": follower.id,
+#                 "profile_image": profile_image_url
+#             })
 
-        return Response({
-            "followers": followers_list
-        }, status=200)
-    else:
-        return Response({"error": "You are not authorized to view this user's followers"}, status=403)
+#         return Response({
+#             "followers": followers_list
+#         }, status=200)
+#     else:
+#         return Response({"error": "You are not authorized to view this user's followers"}, status=403)
 
 
 @user_router.post("/search-followers", auth=JWTAuth())

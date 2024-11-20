@@ -1,6 +1,7 @@
 from ninja import Schema, File, Form,  UploadedFile
 from typing import Optional
 from ninja.files import UploadedFile
+from typing import List
 
 
 class EditUserSchema(Schema):
@@ -28,9 +29,18 @@ class PostSchema(Schema):
     post_id: int
 
 
+class SearchLikeSchema(Schema):
+    post_id: int
+    username: str
+
+
 class CommentSchema(Schema):
     post_id: int
     comment_message: str
+
+
+class DeletePostSchema(Schema):
+    post_id: int
 
 
 class DeleteCommentSchema(Schema):
@@ -47,4 +57,37 @@ class ViewUserStorySchema(Schema):
 
 
 class SearchUserSchema(Schema):
+    username: str
+
+
+class UnfollowUserSchema(Schema):
+    username: str
+
+
+class FollowUserSchema(Schema):
+    username: str
+
+
+class EditPostSchema(Schema):
+    post_id: int
+    caption: str
+
+
+class HideUserFromStorySchema(Schema):
+    story_id: int
+    user_id: int
+
+
+class SearchFollowSchema(Schema):
+    username: str
+    search_string: str
+
+
+class UpdateStoryVisibilitySchema(Schema):
+    story_id: int
+    hidden_usernames: List[str]
+
+
+class SearchViewerSchema(Schema):
+    story_id: int
     username: str

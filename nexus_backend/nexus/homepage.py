@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from .models import Post, UserProfile
 from ninja_jwt.authentication import JWTAuth
 from .schema import PostSchema
+from django.utils.timesince import timesince
 from .posts import post_router
 
 # Create an instance of NinjaAPI
@@ -26,12 +27,12 @@ def get_homepage_posts(request) -> Response:
 
     following_and_self = list(following_users) + [request.user]
 
-    posts = Post.objects.all().order_by('-post_date')
-    # posts = Post.objects.filter(
-    #     user_id__in=following_and_self).order_by('-post_date')
+    # posts = Post.objects.all().order_by('-post_date')
+    posts = Post.objects.filter(
+        user_id__in=following_and_self).order_by('-post_date')
 
-    if not posts.exists():
-        return Response({"message": "No posts available."}, status=200)
+    # if not posts.exists():
+    #     return Response({"message": "No posts available."}, status=200)
 
     response_data = []
     for post in posts:
@@ -52,6 +53,8 @@ def get_homepage_posts(request) -> Response:
                 settings.MEDIA_URL}profile_images/default.png"
         )
 
+        time_ago = timesince(post.post_date)
+
         # comments_count = post.comments.count()
 
         response_data.append({
@@ -62,7 +65,9 @@ def get_homepage_posts(request) -> Response:
             "caption": post.caption,
             "likes_count": likes_count,
             "has_liked": current_user_has_liked,
-            "profile_picture": profile_picture_url
+            "profile_picture": profile_picture_url,
+            "time_lapsed": time_ago,
+            "is_owner": True if post.user_id == request.user else False
             # "comments_count": comments_count,
         })
 

@@ -6,6 +6,7 @@ from django.contrib.auth.hashers import make_password
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import UserProfile
+from django.conf import settings
 
 auth_router = NinjaAPI(urls_namespace='authapi')
 
@@ -73,13 +74,26 @@ def login(request, payload: LoginSchema):
 
     # If authentication is successful
     refresh = RefreshToken.for_user(user)
+
+    # Fetch user profile and profile picture
+    try:
+        user_profile = UserProfile.objects.get(user=user)
+        profile_picture_url = (
+            user_profile.profile_image.url if user_profile.profile_image
+            else f"{settings.MEDIA_URL}profile_images/default.png"
+        )
+    except UserProfile.DoesNotExist:
+        profile_picture_url = f"{settings.MEDIA_URL}profile_images/default.png"
+
     return Response({
         "success": True,
         "message": "User logged in successfully",
         "username": user.username,
+        "profile_picture": profile_picture_url,
         "refresh": str(refresh),
         "access": str(refresh.access_token),
     }, status=200)
+
 
 
 @auth_router.post("/logout", response={200: dict, 400: dict})

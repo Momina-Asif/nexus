@@ -41,23 +41,9 @@ class Comment(models.Model):
     def __str__(self):
         return f'Comment by {self.comment_user.username} on {self.comment_post.caption}'
 
-# Message Model
-
-
-class Message(models.Model):
-    message_from = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name='sent_messages')
-    message_to = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name='received_messages')
-    message_text = models.TextField()
-    message_time = models.DateTimeField(auto_now_add=True)
-    room_id = models.CharField(max_length=255)
-
-    def __str__(self):
-        return f'{self.message_from.username} to {self.message_to.username}: {self.message_text[:20]}...'
-
-
 # Notification Model
+
+
 class Notification(models.Model):
     notification_id = models.AutoField(
         primary_key=True)
@@ -118,3 +104,21 @@ class Story(models.Model):
 
     def __str__(self):
         return f'{self.story_user.username} posted a story'
+
+
+class Conversation(models.Model):
+    id = models.AutoField(primary_key=True)
+    users = models.ManyToManyField(
+        User, related_name="involved_users", blank=True)
+
+
+class Message(models.Model):
+    id = models.AutoField(primary_key=True)
+    producer = models.ForeignKey(
+        User, related_name="sender", on_delete=models.PROTECT)
+    consumer = models.ForeignKey(
+        User, related_name="receiver", on_delete=models.PROTECT)
+    content = models.TextField()
+    belongs_in = models.ForeignKey(
+        Conversation, related_name="belongs_in", on_delete=models.CASCADE)
+    created_at = models.DateTimeField()

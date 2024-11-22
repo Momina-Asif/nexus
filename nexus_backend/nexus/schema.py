@@ -91,3 +91,13 @@ class UpdateStoryVisibilitySchema(Schema):
 class SearchViewerSchema(Schema):
     story_id: int
     username: str
+
+
+class ConversationMessagesSchema(Schema):
+    convo_id: int
+
+
+class NewMessageSchema(Schema):
+    convo_id: int
+    content: str
+    receiver_username: str

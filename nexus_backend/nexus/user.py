@@ -3,7 +3,7 @@ from django.conf import settings
 from ninja import Query
 from django.contrib.auth.models import User
 from django.core.files.base import ContentFile
-from .models import UserProfile, Post, Notification
+from .models import UserProfile, Post, Notification, Conversation
 from ninja import NinjaAPI
 from ninja.responses import Response
 from ninja_jwt.authentication import JWTAuth
@@ -430,6 +430,9 @@ def accept_follow_request(request, payload: FollowUserSchema) -> Response:
         notify_text=f"You accepted the follow request from {
             requester.username}"
     )
+    conversation = Conversation.objects.create()
+    conversation.users.add(request.user, requester)
+    conversation.save()
 
     return Response({
         "success": True,

@@ -46,6 +46,7 @@ def signup(request, payload: SignUpSchema):
         "user_id": user.id,
         "refresh": str(refresh),
         "access": str(refresh.access_token),
+        "username": payload.username
     }, status=201)
 
 # Define the login route
@@ -93,7 +94,6 @@ def login(request, payload: LoginSchema):
         "refresh": str(refresh),
         "access": str(refresh.access_token),
     }, status=200)
-
 
 
 @auth_router.post("/logout", response={200: dict, 400: dict})

@@ -46,8 +46,6 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'ninja_jwt',
     'rest_framework_simplejwt.token_blacklist',
-    'django_celery_beat',
-
 ]
 
 MIDDLEWARE = [
@@ -97,7 +95,7 @@ DATABASES = {
         'NAME': config('DB_NAME'),
         'USER': config('DB_USER'),
         'PASSWORD': config('DB_PASSWORD'),
-        'HOST': 'dpg-cslp29jqf0us739151vg-a.oregon-postgres.render.com',
+        'HOST': 'dpg-ct25hmqj1k6c7394dp60-a.oregon-postgres.render.com',
         'PORT': '5432',
     }
 }

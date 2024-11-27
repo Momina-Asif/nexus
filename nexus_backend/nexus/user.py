@@ -430,9 +430,17 @@ def accept_follow_request(request, payload: FollowUserSchema) -> Response:
         notify_text=f"You accepted the follow request from {
             requester.username}"
     )
-    conversation = Conversation.objects.create()
-    conversation.users.add(request.user, requester)
-    conversation.save()
+    existing_conversation = Conversation.objects.filter(
+        users=request.user
+    ).filter(
+        users=requester
+    ).first()
+
+    # If no existing conversation is found, create a new one
+    if not existing_conversation:
+        conversation = Conversation.objects.create()
+        conversation.users.add(request.user, requester)
+        conversation.save()
 
     return Response({
         "success": True,

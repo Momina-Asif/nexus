@@ -106,6 +106,10 @@ def get_user_stories(request, payload: ViewUserStorySchema) -> Response:
 
     if stories.exists():
         story = stories[payload.index]
+        user_profile_image_url = (
+            user_profile.profile_image.url if user_profile.profile_image else f"{
+                settings.MEDIA_URL}profile_images/default.png"
+            )
 
         # Prepare response data
         return Response({
@@ -118,6 +122,7 @@ def get_user_stories(request, payload: ViewUserStorySchema) -> Response:
             "image": story.story_image.url if story.story_image else None,
             "time": story.story_time.isoformat(),
             "viewed_by_count": story.viewed_by.count() if is_owner else None,
+            "profile_image": user_profile_image_url,
             "is_owner": is_owner
         }, status=200)
     else:

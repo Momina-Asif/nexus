@@ -27,7 +27,6 @@ def get_homepage_posts(request) -> Response:
 
     following_and_self = list(following_users) + [request.user]
 
-    # posts = Post.objects.all().order_by('-post_date')
     posts = Post.objects.filter(
         user_id__in=following_and_self).order_by('-post_date')
 

@@ -22,14 +22,12 @@ def signup(request, payload: SignUpSchema):
     if User.objects.filter(email=payload.email).exists():
         return Response({"success": False, "message": "Email already in use"}, status=400)
 
-    # Create the user
     user = User.objects.create(
         username=payload.username,
         password=make_password(payload.password),
         email=payload.email,
     )
 
-    # Create the user profile
     user_profile_data = {}
     if payload.first_name:
         user_profile_data['first_name'] = payload.first_name
@@ -38,7 +36,6 @@ def signup(request, payload: SignUpSchema):
 
     UserProfile.objects.create(user=user, **user_profile_data)
 
-    # Generate JWT tokens
     refresh = RefreshToken.for_user(user)
     return Response({
         "success": True,
@@ -49,7 +46,6 @@ def signup(request, payload: SignUpSchema):
         "username": payload.username
     }, status=201)
 
-# Define the login route
 
 
 @auth_router.post("/login", response={200: dict, 401: dict, 404: dict})
@@ -73,10 +69,8 @@ def login(request, payload: LoginSchema):
             else:
                 return Response({"success": False, "message": "Username not found"}, status=404)
 
-    # If authentication is successful
     refresh = RefreshToken.for_user(user)
 
-    # Fetch user profile and profile picture
     try:
         user_profile = UserProfile.objects.get(user=user)
         profile_picture_url = (
@@ -98,13 +92,11 @@ def login(request, payload: LoginSchema):
 
 @auth_router.post("/logout", response={200: dict, 400: dict})
 def logout(request):
-    # Get the token from the Authorization header
     auth_header = request.headers.get('Authorization')
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.split(" ")[1]
         try:
             refresh_token = RefreshToken(token)
-            # Blacklist the refresh token
             refresh_token.blacklist()
             return Response({"success": True, "message": "Logged out successfully"}, status=200)
         except Exception as e:

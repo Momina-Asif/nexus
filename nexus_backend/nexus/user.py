@@ -11,7 +11,7 @@ from ninja.errors import HttpError
 from ninja import Schema, File, Form,  UploadedFile
 from typing import Optional
 from ninja import Body
-from .schema import SearchUserSchema, UnfollowUserSchema, FollowUserSchema, SearchFollowSchema
+from .schema import UserSchema, UserSchema, SearchFollowSchema
 from django.contrib.auth.hashers import make_password
 from django.utils.timesince import timesince
 
@@ -31,21 +31,17 @@ def edit_profile(request,
                  new_password: Optional[str] = Form(None),
                  profile_picture: Optional[UploadedFile] = File(None)) -> Response:
 
-    # Ensure the user is authenticated
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
 
-    # Get the user's profile
     try:
         user_profile = UserProfile.objects.get(user=request.user)
     except UserProfile.DoesNotExist:
         return Response({"error": "User profile not found"}, status=404)
 
-    # Check if any data was provided
     if not any([username, first_name, last_name, bio, profile_picture, previous_password, new_password]):
         return Response({"error": "No data provided"}, status=400)
 
-    # Validate and update fields
     if username:
         if User.objects.filter(username=username).exclude(id=request.user.id).exists():
             return Response({"error": "Username is already taken"}, status=400)
@@ -68,7 +64,7 @@ def edit_profile(request,
     if profile_picture:
         if user_profile.profile_image:
             user_profile.profile_image.delete(
-                save=False)  # Delete the old image file
+                save=False)  
 
         extension = profile_picture.name.split(".")[-1]
         image_name = f'profile_images/{request.user.id}.{extension}'
@@ -76,11 +72,9 @@ def edit_profile(request,
             image_name, ContentFile(profile_picture.read()))
         user_profile.profile_image = image_path
 
-    # Save updated user and profile information
     request.user.save()
     user_profile.save()
 
-    # Define the profile picture URL with a default fallback
     profile_picture_url = (
         user_profile.profile_image.url
         if user_profile.profile_image
@@ -101,22 +95,18 @@ def edit_profile(request,
 
 
 @user_router.post("/search-user", auth=JWTAuth())
-def search_user(request, payload: SearchUserSchema) -> Response:
-    # Ensure the user is authenticated
+def search_user(request, payload: UserSchema) -> Response:
+    
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
 
-    # Return an empty array if the username is an empty string
     if not payload.username.strip():
         return Response({"users": []}, status=200)
-
-    # Filter users by username containing the search query
+    
     users = User.objects.filter(username__icontains=payload.username)
 
-    # Prepare response data including the profile picture
     user_data = []
     for user in users:
-        # Check if user has a profile image, otherwise set to default
         user_profile = UserProfile.objects.get(
             user=user) if hasattr(user, 'userprofile') else None
         profile_picture_url = (
@@ -133,32 +123,27 @@ def search_user(request, payload: SearchUserSchema) -> Response:
             "is_following": is_following
         })
 
-    # Return the response with matching users
     return Response({"users": user_data}, status=200)
 
 
 @user_router.post("/user-profile", auth=JWTAuth())
-def user_profile(request, payload: SearchUserSchema) -> Response:
-    # Ensure the user is authenticated
+def user_profile(request, payload: UserSchema) -> Response:
+    
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
 
-    # Get the username from the JSON body
     username = payload.username
 
     if not username:
         return Response({"error": "Username is required"}, status=400)
 
     try:
-        # Get the user profile by username
         searched_user = User.objects.get(username=username)
     except User.DoesNotExist:
         return Response({"error": "User not found"}, status=404)
 
-    # Get the user profile information
     user_profile = UserProfile.objects.get(user=searched_user)
 
-    # Get the authenticated user's profile to check their followers
     auth_user_profile = UserProfile.objects.get(user=request.user)
 
     follows_searched_user = request.user in user_profile.followers.all()
@@ -169,7 +154,7 @@ def user_profile(request, payload: SearchUserSchema) -> Response:
     following_count = user_profile.following.all().count()
 
     posts_data = []
-    if follows_searched_user or request.user == searched_user:  # Include posts if follows or same user
+    if follows_searched_user or request.user == searched_user:  
         posts = Post.objects.filter(user_id=searched_user)
         posts_data = [
             {
@@ -205,22 +190,19 @@ def user_profile(request, payload: SearchUserSchema) -> Response:
 
 
 @user_router.post("/unfollow", auth=JWTAuth())
-def unfollow_user(request, payload: UnfollowUserSchema) -> Response:
+def unfollow_user(request, payload: UserSchema) -> Response:
     # Ensure the user is authenticated
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
 
-    # Check if the user exists
     try:
         user_to_unfollow = User.objects.get(username=payload.username)
     except User.DoesNotExist:
         return Response({"error": "User not found"}, status=404)
 
-    # Ensure the authenticated user is not unfollowing themselves
     if user_to_unfollow == request.user:
         return Response({"error": "You cannot unfollow yourself."}, status=400)
 
-    # Get the UserProfile objects for both users
     try:
         user_profile = UserProfile.objects.get(user=request.user)
         unfollowed_user_profile = UserProfile.objects.get(
@@ -228,7 +210,6 @@ def unfollow_user(request, payload: UnfollowUserSchema) -> Response:
     except UserProfile.DoesNotExist:
         return Response({"error": "User profile not found for one or both users."}, status=404)
 
-    # Remove the user from the following and followers lists
     if user_to_unfollow in user_profile.following.all():
         user_profile.following.remove(user_to_unfollow)
     if request.user in unfollowed_user_profile.followers.all():
@@ -241,7 +222,7 @@ def unfollow_user(request, payload: UnfollowUserSchema) -> Response:
 
 
 # @user_router.get("/view-following", auth=JWTAuth())
-# def view_following(request, payload: FollowUserSchema) -> Response:
+# def view_following(request, payload: UserSchema) -> Response:
 #     # Ensure the user is authenticated
 #     if not request.user.is_authenticated:
 #         return Response({"error": "Unauthorized"}, status=401)
@@ -283,34 +264,29 @@ def unfollow_user(request, payload: UnfollowUserSchema) -> Response:
 
 
 @user_router.post("/follow", auth=JWTAuth())
-def follow_user(request, payload: FollowUserSchema) -> Response:
-    # Ensure the user is authenticated
+def follow_user(request, payload: UserSchema) -> Response:
+    
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
 
-    # Check if the user to follow exists
     try:
         user_to_follow = User.objects.get(username=payload.username)
     except User.DoesNotExist:
         return Response({"error": "User not found"}, status=404)
 
-    # Ensure the authenticated user is not trying to follow themselves
     if user_to_follow == request.user:
         return Response({"error": "You cannot follow yourself."}, status=400)
 
-    # Get the UserProfile objects for both users
     try:
         user_profile = UserProfile.objects.get(user=request.user)
         followed_user_profile = UserProfile.objects.get(user=user_to_follow)
     except UserProfile.DoesNotExist:
         return Response({"error": "User profile not found for one or both users."}, status=404)
 
-    # Add the authenticated user to the pending_requests of the target user
     if request.user not in followed_user_profile.pending_requests.all():
         followed_user_profile.pending_requests.add(request.user)
         followed_user_profile.save()
 
-        # Create a notification
         Notification.objects.create(
             notify_from=request.user,
             notify_to=user_to_follow,
@@ -339,18 +315,16 @@ def follow_user(request, payload: FollowUserSchema) -> Response:
 
 
 @user_router.post("/cancel-request", auth=JWTAuth())
-def cancel_request(request, payload: FollowUserSchema) -> Response:
-    # Ensure the user is authenticated
+def cancel_request(request, payload: UserSchema) -> Response:
+   
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
 
-    # Check if the user to follow exists
     try:
         user_to_cancel = User.objects.get(username=payload.username)
     except User.DoesNotExist:
         return Response({"error": "User not found"}, status=404)
 
-    # Get the UserProfile objects for both users
     try:
         user_profile = UserProfile.objects.get(user=request.user)
         cancelled_user_profile = UserProfile.objects.get(user=user_to_cancel)
@@ -375,46 +349,41 @@ def cancel_request(request, payload: FollowUserSchema) -> Response:
 
 
 @user_router.post("/accept-follow-request", auth=JWTAuth())
-def accept_follow_request(request, payload: FollowUserSchema) -> Response:
+def accept_follow_request(request, payload: UserSchema) -> Response:
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
 
     try:
-        # Fetch the user who sent the follow request
         requester = User.objects.get(username=payload.username)
     except User.DoesNotExist:
         return Response({"success": False, "message": "Requester not found"}, status=404)
 
     try:
-        # Fetch the profile of the current user
+        
         user_profile = UserProfile.objects.get(user=request.user)
     except UserProfile.DoesNotExist:
         return Response({"success": False, "message": "User profile not found"}, status=404)
 
-    # Check if the requester is in the pending_requests list
     if requester not in user_profile.pending_requests.all():
         return Response({"success": False, "message": "No follow request from this user"}, status=400)
 
-    # Delete the pending notification (if it exists)
     Notification.objects.filter(
         notify_from=requester,
         notify_to=request.user,
         notify_type="follow_request"
     ).delete()
 
-    # Update follower and following lists
     user_profile.pending_requests.remove(
-        requester)  # Remove from pending requests
-    user_profile.followers.add(requester)             # Add to followers
+        requester) 
+    user_profile.followers.add(requester)             
     requester_profile = UserProfile.objects.get(user=requester)
-    # Add the current user to requester's following
+
     requester_profile.following.add(request.user)
     requester_profile.sent_requests.remove(request.user)
 
     user_profile.save()
     requester_profile.save()
 
-    # Create a notification for the requester
     Notification.objects.create(
         notify_from=request.user,
         notify_to=requester,
@@ -422,7 +391,6 @@ def accept_follow_request(request, payload: FollowUserSchema) -> Response:
         notify_text=f"{request.user.username} accepted your follow request"
     )
 
-    # Create a notification for the user who accepted the request
     Notification.objects.create(
         notify_from=requester,
         notify_to=request.user,
@@ -436,7 +404,6 @@ def accept_follow_request(request, payload: FollowUserSchema) -> Response:
         users=requester
     ).first()
 
-    # If no existing conversation is found, create a new one
     if not existing_conversation:
         conversation = Conversation.objects.create()
         conversation.users.add(request.user, requester)
@@ -450,15 +417,13 @@ def accept_follow_request(request, payload: FollowUserSchema) -> Response:
 
 @user_router.get("/view-notifications", auth=JWTAuth())
 def view_notifications(request) -> Response:
-    # Ensure the user is authenticated
+
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
 
-    # Retrieve notifications for the authenticated user
     notifications = Notification.objects.filter(notify_to=request.user).order_by(
-        '-notify_time')  # Get notifications for the user
+        '-notify_time') 
 
-    # Prepare the response data
     response_data = []
 
     for notification in notifications:
@@ -471,7 +436,6 @@ def view_notifications(request) -> Response:
         response_data.append({
             "notify_from": notification.notify_from.username,
             "notify_text": notification.notify_text,
-            # Human-readable time difference
             "notify_date": timesince(notification.notify_time) + " ago",
             "notify_type": notification.notify_type,
             "post_id": notification.notify_post.post_id if notification.notify_post else None,
@@ -484,7 +448,7 @@ def view_notifications(request) -> Response:
 
 
 # @user_router.get("/view-followers", auth=JWTAuth())
-# def view_followers(request, payload: FollowUserSchema) -> Response:
+# def view_followers(request, payload: UserSchema) -> Response:
 #     # Ensure the user is authenticated
 #     if not request.user.is_authenticated:
 #         return Response({"error": "Unauthorized"}, status=401)
@@ -540,7 +504,6 @@ def search_followers_of_user(request, payload: SearchFollowSchema) -> Response:
 
     followers = target_user_profile.followers.all()
 
-    # Filter the followers list by the search string
     filtered_followers = followers.filter(
         username__icontains=payload.search_string)
 
@@ -577,7 +540,6 @@ def search_following_of_user(request, payload: SearchFollowSchema) -> Response:
 
     following = target_user_profile.following.all()
 
-    # Filter the following list by the search string
     filtered_following = following.filter(
         username__icontains=payload.search_string)
 
@@ -601,7 +563,7 @@ def search_following_of_user(request, payload: SearchFollowSchema) -> Response:
 
 
 @user_router.post("/remove-follower", auth=JWTAuth())
-def remove_follower(request, payload: FollowUserSchema) -> Response:
+def remove_follower(request, payload: UserSchema) -> Response:
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
 

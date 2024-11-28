@@ -11,5 +11,9 @@ class Command(BaseCommand):
             expires_at__lte=now())
         count = expired_stories.count()
 
+        for story in expired_stories:
+            if story.story_image: 
+                story.story_image.delete(save=False)
+
         expired_stories.delete()
         self.stdout.write(f'{count} expired stories deleted.')

@@ -55,18 +55,8 @@ class ViewUserStorySchema(Schema):
     username: str
     index: int
 
-
-class SearchUserSchema(Schema):
+class UserSchema(Schema):
     username: str
-
-
-class UnfollowUserSchema(Schema):
-    username: str
-
-
-class FollowUserSchema(Schema):
-    username: str
-
 
 class EditPostSchema(Schema):
     post_id: int

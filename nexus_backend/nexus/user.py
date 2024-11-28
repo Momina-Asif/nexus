@@ -597,3 +597,39 @@ def search_following_of_user(request, payload: SearchFollowSchema) -> Response:
         })
 
     return Response({"following": following_data}, status=200)
+
+
+@user_router.post("/remove-follower", auth=JWTAuth())
+def remove_follower(request, payload: FollowUserSchema) -> Response:
+
+    if not request.user.is_authenticated:
+        return Response({"error": "Unauthorized"}, status=401)
+
+    try:
+        target_user = User.objects.get(username=payload.username)
+    except User.DoesNotExist:
+        return Response({"error": "User not found"}, status=404)
+
+    try:
+        user_profile = UserProfile.objects.get(user=request.user)
+    except UserProfile.DoesNotExist:
+        return Response({"error": "Requesting user's profile not found"}, status=404)
+
+    try:
+
+        target_profile = UserProfile.objects.get(user=target_user)
+    except UserProfile.DoesNotExist:
+        return Response({"error": "Target user's profile not found"}, status=404)
+
+    if target_profile in user_profile.followers.all():
+        
+        user_profile.followers.remove(target_profile)
+        return Response(
+            {"message": f"{payload.username} has been removed from your followers."},
+            status=200,
+        )
+    else:
+        return Response(
+            {"message": f"{payload.username} is not in your followers."},
+            status=400,
+        )

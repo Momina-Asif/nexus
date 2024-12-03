@@ -20,4 +20,7 @@ jobs:
       - name: SonarCloud Scan
         uses: sonarsource/sonarcloud-github-action@v2
         env:
-          SONAR_TOKEN: ${{ secrets.SONARTOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONARTOKEN }}  # Make sure the token is correctly passed
+        with:
+          organization: momina-asif  # Set your organization name here
+          projectKey: nexus  # Set your project key here

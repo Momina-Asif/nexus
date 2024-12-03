@@ -10,7 +10,6 @@ from django.utils.timesince import timesince
 from django.utils import timezone
 from .schema import ConversationMessagesSchema, NewMessageSchema
 
-# Create an instance of NinjaAPI
 message_router = NinjaAPI(urls_namespace='message_api')
 
 

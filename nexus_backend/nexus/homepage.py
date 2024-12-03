@@ -9,7 +9,6 @@ from .schema import PostSchema
 from django.utils.timesince import timesince
 from .posts import post_router
 
-# Create an instance of NinjaAPI
 hp_router = NinjaAPI(urls_namespace='HPapi')
 
 
@@ -30,8 +29,6 @@ def get_homepage_posts(request) -> Response:
     posts = Post.objects.filter(
         user_id__in=following_and_self).order_by('-post_date')
 
-    # if not posts.exists():
-    #     return Response({"message": "No posts available."}, status=200)
 
     response_data = []
     for post in posts:
@@ -54,8 +51,6 @@ def get_homepage_posts(request) -> Response:
 
         time_ago = timesince(post.post_date)
 
-        # comments_count = post.comments.count()
-
         response_data.append({
             "id": post.post_id,
             "user": post.user_id.username,
@@ -67,7 +62,6 @@ def get_homepage_posts(request) -> Response:
             "profile_picture": profile_picture_url,
             "time_lapsed": time_ago,
             "is_owner": True if post.user_id == request.user else False
-            # "comments_count": comments_count,
         })
 
     return Response(response_data, status=200)

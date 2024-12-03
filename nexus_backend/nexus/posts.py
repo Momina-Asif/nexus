@@ -14,13 +14,14 @@ from django.conf import settings
 
 post_router = NinjaAPI(urls_namespace='postAPI')
 
+post_message = "Post Not Found"
 
 @post_router.post("/view-comments", auth=JWTAuth())
 def get_comments(request, payload: PostSchema) -> Response:
     try:
         post = Post.objects.get(post_id=payload.post_id)
     except Post.DoesNotExist:
-        return Response({"error": "Post not found"}, status=404)
+        return Response({"error": post_message}, status=404)
 
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
@@ -46,50 +47,7 @@ def get_comments(request, payload: PostSchema) -> Response:
             "is_owner": True if comment.comment_user == request.user or request.user == post.user_id else False
         })
 
-    # response_data = [
-        # {
-        #     "comment_id": comment.comment_id,
-        #     "comment_user": comment.comment_user.username,
-        #     "comment_message": comment.comment_message,
-        #     "comment_date": comment.comment_date.isoformat(),
-        # }
-    #     for comment in comments
-    # ]
-
     return Response(response_data, status=200)
-
-
-# @post_router.post("/view-likes", auth=JWTAuth())
-# def get_likes(request, payload: PostSchema) -> Response:
-#     # Ensure the user is authenticated
-#     if not request.user.is_authenticated:
-#         return Response({"error": "Unauthorized"}, status=401)
-
-#     # Retrieve the post using the provided post_id from the payload
-#     try:
-#         post = Post.objects.get(post_id=payload.post_id)
-#     except Post.DoesNotExist:
-#         return Response({"error": "Post not found"}, status=404)
-
-#     # Get the users who liked the post
-#     liked_users = post.likes_list.all()
-
-#     response_data = []
-
-#     for user in liked_users:
-#         liked_user_profile = UserProfile.objects.get(user=user)
-#         profile_image_url = (
-#             liked_user_profile.profile_image.url if liked_user_profile.profile_image else f"{
-#                 settings.MEDIA_URL}profile_images/default.png"
-#         )
-#         response_data.append({
-#             "username": user.username,
-#             "profile_picture": profile_image_url
-#         })
-
-#     # Prepare the response data
-
-#     return Response(response_data, status=200)
 
 
 @post_router.post("/get-post", auth=JWTAuth())
@@ -101,7 +59,7 @@ def like_post(request, payload: PostSchema) -> Response:
     try:
         post = Post.objects.get(post_id=payload.post_id)
     except Post.DoesNotExist:
-        return Response({"error": "Post not found"}, status=404)
+        return Response({"error": post_message}, status=404)
     post_image_url = os.path.join(
         settings.MEDIA_URL, f'posts/{post.post_id}.{post.post_image.name.split(".")[-1]}')
 
@@ -139,7 +97,7 @@ def like_post(request, payload: PostSchema) -> Response:
     try:
         post = Post.objects.get(post_id=payload.post_id)
     except Post.DoesNotExist:
-        return Response({"error": "Post not found"}, status=404)
+        return Response({"error": post_message}, status=404)
 
     message = ""
     if not post.likes_list.filter(id=request.user.id).exists():
@@ -160,35 +118,16 @@ def like_post(request, payload: PostSchema) -> Response:
 
     return Response({"success": True, "message": message}, status=201)
 
-
-# @post_router.post("/unlike-post", auth=JWTAuth())
-# def unlike_post(request, payload: PostSchema) -> Response:
-#     # Ensure the user is authenticated
-#     if not request.user.is_authenticated:
-#         return Response({"error": "Unauthorized"}, status=401)
-
-#     # Retrieve the post using the provided post_id from the payload
-#     try:
-#         post = Post.objects.get(post_id=payload.post_id)
-#     except Post.DoesNotExist:
-#         return Response({"error": "Post not found"}, status=404)
-
-#     # Remove the logged-in user from the likes_list of the post
-#     post.likes_list.remove(request.user)
-
-#     # Prepare a response message
-#     return Response({"success": True, "message": "Post unliked successfully"}, status=200)
-
 @post_router.post("/make-comment", auth=JWTAuth())
 def create_comment(request, payload: CommentSchema) -> Response:
-    # Ensure the user is authenticated
+    
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
 
     try:
         post = Post.objects.get(post_id=payload.post_id)
     except Post.DoesNotExist:
-        return Response({"error": "Post not found"}, status=404)
+        return Response({"error": post_message}, status=404)
 
     comment = Comment.objects.create(
         comment_post=post,
@@ -197,7 +136,7 @@ def create_comment(request, payload: CommentSchema) -> Response:
         comment_date=timezone.now()
     )
 
-    notification = Notification.objects.create(
+    Notification.objects.create(
         notify_from=request.user,
         notify_to=post.user_id,  
         notify_type="comment",
@@ -218,7 +157,7 @@ def create_comment(request, payload: CommentSchema) -> Response:
 
 @post_router.post("/delete-comment", auth=JWTAuth())
 def delete_comment(request, payload: DeleteCommentSchema) -> Response:
-    # Ensure the user is authenticated
+    
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
 
@@ -269,7 +208,7 @@ def delete_post(request, payload: DeletePostSchema) -> Response:
     try:
         post = Post.objects.get(post_id=payload.post_id)
     except Post.DoesNotExist:
-        return Response({"error": "Post not found"}, status=404)
+        return Response({"error": post_message}, status=404)
 
     if post.user_id != request.user:
         return Response({"error": "You are not authorized to delete this post"}, status=403)
@@ -294,7 +233,7 @@ def edit_post(request, payload: EditPostSchema) -> Response:
     try:
         post = Post.objects.get(post_id=payload.post_id)
     except Post.DoesNotExist:
-        return Response({"success": False, "message": "Post not found"}, status=404)
+        return Response({"success": False, "message": post_message}, status=404)
 
     if post.user_id != request.user:
         return Response({"success": False, "message": "You are not the owner of this post"}, status=403)
@@ -319,7 +258,7 @@ def search_user_in_post_likes(request, payload: SearchLikeSchema) -> Response:
     try:
         post = Post.objects.get(pk=payload.post_id)
     except Post.DoesNotExist:
-        return Response({"error": "Post not found"}, status=404)
+        return Response({"error": post_message}, status=404)
 
     liked_users = post.likes_list.filter(username__icontains=payload.username)
 

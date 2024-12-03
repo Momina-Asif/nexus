@@ -20,7 +20,7 @@ class Post(models.Model):
         User, on_delete=models.CASCADE, related_name='posts')
     post_image = models.ImageField(
         upload_to=post_image_directory, blank=True, null=True)
-    caption = models.TextField(max_length=255, blank=True, null=True)
+    caption = models.TextField(max_length=255, blank=True)
     likes_list = models.ManyToManyField(
         User, related_name='liked_posts', blank=True)
     post_date = models.DateTimeField(auto_now_add=True)
@@ -69,7 +69,7 @@ class UserProfile(models.Model):
         max_length=30, null=False, blank=False, default='User')
     last_name = models.CharField(max_length=50)
     profile_image = models.ImageField(
-        upload_to='profile_images/', blank=True, null=True)  # Changed to ImageField
+        upload_to='profile_images/', blank=True, null=True) 
     bio = models.TextField(blank=True)
     pending_requests = models.ManyToManyField(
         User, related_name='friend_requests', blank=True)
@@ -96,7 +96,6 @@ class Story(models.Model):
     hidden_from = models.ManyToManyField(
         User, related_name='hidden_from', blank=True)
 
-    # Use a function to calculate the default expiration time
     def default_expiration_time():
         return timezone.now() + timedelta(days=1)
 

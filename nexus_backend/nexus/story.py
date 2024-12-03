@@ -10,6 +10,7 @@ from django.conf import settings
 
 story_router = NinjaAPI(urls_namespace='storyAPI')
 
+story_message = "Story Not Found"
 
 @story_router.post("/hide-user-from-story", auth=JWTAuth())
 def hide_user_from_story(request, payload: HideUserFromStorySchema) -> Response:
@@ -23,7 +24,7 @@ def hide_user_from_story(request, payload: HideUserFromStorySchema) -> Response:
     try:
         story = Story.objects.get(story_id=story_id)
     except Story.DoesNotExist:
-        return Response({"error": "Story not found"}, status=404)
+        return Response({"error": story_message}, status=404)
 
     if story.story_user != request.user:
         return Response({"error": "You are not authorized to hide users from this story"}, status=403)
@@ -129,7 +130,7 @@ def mark_story_as_viewed(request, payload: ViewStorySchema) -> Response:
         story = Story.objects.get(pk=payload.story_id)
        
     except Story.DoesNotExist:
-        return Response({"error": "Story not found"}, status=404)
+        return Response({"error": story_message}, status=404)
     except ObjectDoesNotExist:
         return Response({"error": "User not found"}, status=404)
 
@@ -147,7 +148,6 @@ def mark_story_as_viewed(request, payload: ViewStorySchema) -> Response:
 
 @story_router.get("/friends-stories", auth=JWTAuth())
 def get_friends_with_stories(request) -> Response:
-    
     if not request.user.is_authenticated:
         return Response({"error": "Unauthorized"}, status=401)
 
@@ -158,95 +158,48 @@ def get_friends_with_stories(request) -> Response:
 
     friends_with_stories = []
 
-    user_stories = Story.objects.filter(
-        story_user=request.user
-    ).exclude(hidden_from=request.user)
+    user_stories = get_user_stories(request.user)
 
     if user_stories.exists():
-        story_index_to_view = sum(
-            1 for story in user_stories if story.viewed_by.filter(id=request.user.id).exists()
-        )
-
-        user_profile_image_url = (
-            user_profile.profile_image.url if user_profile.profile_image else f"{
-                settings.MEDIA_URL}profile_images/default.png"
-        )
-
         friends_with_stories.append({
             "username": request.user.username,
             "user_id": request.user.id,
-            "profile_image": user_profile_image_url,
-            "story_index_to_view": story_index_to_view if story_index_to_view < user_stories.count() else 0,
-            "yet_to_view": story_index_to_view < user_stories.count()
+            "profile_image": get_profile_image_url(user_profile),
+            "story_index_to_view": get_story_index_to_view(user_stories, request.user),
+            "yet_to_view": has_unviewed_stories(user_stories, request.user)
         })
 
     friends = user_profile.following.all()
-
     for friend in friends:
-        stories = Story.objects.filter(
-            story_user=friend
-        ).exclude(hidden_from=request.user)
-
+        stories = get_user_stories(friend)
         if stories.exists():
-            story_index_to_view = sum(
-                1 for story in stories if story.viewed_by.filter(id=request.user.id).exists()
-            )
-
             friend_profile = UserProfile.objects.get(user=friend)
-            profile_image_url = (
-                friend_profile.profile_image.url if friend_profile.profile_image else f"{
-                    settings.MEDIA_URL}profile_images/default.png"
-            )
-
             friends_with_stories.append({
                 "username": friend.username,
                 "user_id": friend.id,
-                "profile_image": profile_image_url,
-                "story_index_to_view": story_index_to_view if story_index_to_view < stories.count() else 0,
-                "yet_to_view": story_index_to_view < stories.count()
+                "profile_image": get_profile_image_url(friend_profile),
+                "story_index_to_view": get_story_index_to_view(stories, request.user),
+                "yet_to_view": has_unviewed_stories(stories, request.user)
             })
 
-    return Response({
-        "friends_with_stories": friends_with_stories
-    }, status=200)
+    return Response({"friends_with_stories": friends_with_stories})
 
 
-# @story_router.post("/viewers", auth=JWTAuth())
-# def get_story_viewers(request, payload: ViewStorySchema) -> Response:
-#     # Ensure the user is authenticated
-#     if not request.user.is_authenticated:
-#         return Response({"error": "Unauthorized"}, status=401)
+def get_user_stories(user):
+    return Story.objects.filter(story_user=user).exclude(hidden_from=user)
 
-#     try:
-#         story = Story.objects.get(pk=payload.story_id)
-#     except Story.DoesNotExist:
-#         return Response({"error": "Story not found"}, status=404)
 
-#     # Check if the authenticated user is the one who posted the story
-#     if request.user != story.story_user:
-#         return Response({"error": "You are not authorized to view the viewers of this story"}, status=403)
+def get_profile_image_url(user_profile):
+    return user_profile.profile_image.url if user_profile.profile_image else f"{settings.MEDIA_URL}profile_images/default.png"
 
-#     # Get the viewers of the story (the users who have viewed the story)
-#     viewers = story.viewed_by.all()
 
-#     # Prepare the response with the usernames of users who have viewed the story
-#     viewers_list = []
-#     for viewer in viewers:
-#         viewer_profile = UserProfile.objects.get(user=viewer)
-#         profile_image_url = (
-#             viewer_profile.profile_image.url if viewer_profile.profile_image else f"{
-#                 settings.MEDIA_URL}profile_images/default.png"
-#         )
-#         viewers_list.append({
-#             "username": viewer.username,
-#             "profile_picture": profile_image_url
-#         })
+def get_story_index_to_view(stories, user):
+    return sum(1 for story in stories if story.viewed_by.filter(id=user.id).exists())
 
-#     return Response({
-#         "story_id": payload.story_id,
-#         "viewers_list": viewers_list
-#     }, status=200)
 
+def has_unviewed_stories(stories, user):
+    story_index_to_view = get_story_index_to_view(stories, user)
+    return story_index_to_view < stories.count()
 
 @story_router.post("/visibility", auth=JWTAuth())
 def get_story_visibility(request, payload: ViewStorySchema) -> Response:
@@ -257,7 +210,7 @@ def get_story_visibility(request, payload: ViewStorySchema) -> Response:
     try:
         story = Story.objects.get(pk=payload.story_id)
     except Story.DoesNotExist:
-        return Response({"error": "Story not found"}, status=404)
+        return Response({"error": story_message}, status=404)
 
     if request.user != story.story_user:
         return Response({"error": "You are not authorized to view the visibility of this story"}, status=403)
@@ -290,7 +243,7 @@ def update_story_visibility(request, payload: UpdateStoryVisibilitySchema) -> Re
         # Fetch the story by its ID
         story = Story.objects.get(pk=payload.story_id)
     except Story.DoesNotExist:
-        return Response({"error": "Story not found"}, status=404)
+        return Response({"error": story_message}, status=404)
 
     if request.user != story.story_user:
         return Response({"error": "You are not authorized to update the visibility of this story"}, status=403)
@@ -322,7 +275,7 @@ def delete_story(request, payload: ViewStorySchema) -> Response:
     try:
         story = Story.objects.get(pk=payload.story_id)
     except Story.DoesNotExist:
-        return Response({"error": "Story not found"}, status=404)
+        return Response({"error": story_message}, status=404)
 
     if request.user != story.story_user:
         return Response({
@@ -349,7 +302,7 @@ def search_story_viewer(request, payload: SearchViewerSchema) -> Response:
     try:
         story = Story.objects.get(pk=payload.story_id)
     except Story.DoesNotExist:
-        return Response({"error": "Story not found"}, status=404)
+        return Response({"error": story_message}, status=404)
 
     if request.user != story.story_user:
         return Response({"error": "You are not authorized to view viewers of this story"}, status=403)
